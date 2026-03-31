@@ -21,10 +21,6 @@ struct SettingsView: View {
             GeneralSettingsView(viewModel: viewModel)
                 .tabItem { Label("通用", systemImage: "gearshape") }
                 .tag(3)
-
-            AboutView()
-                .tabItem { Label("关于", systemImage: "info.circle") }
-                .tag(4)
         }
         .frame(width: 600, height: 440)
         .alert("切换失败", isPresented: Binding(
@@ -120,27 +116,6 @@ struct SettingsHeader: View {
                 .foregroundStyle(Color.accentColor)
                 .font(.system(size: 15, weight: .bold))
             Text(title).font(.system(size: 15, weight: .bold))
-        }
-    }
-}
-
-struct AboutView: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            ZStack {
-                Circle().fill(Color.accentColor.opacity(0.1)).frame(width: 80, height: 80)
-                Image(systemName: "shippingbox.fill").font(.system(size: 40))
-                    .foregroundStyle(Color.accentColor)
-            }
-            VStack(spacing: 8) {
-                Text("Dev Source Switcher").font(.title2).bold()
-                Text("Version 1.6.0").font(.subheadline).foregroundStyle(Color.secondary)
-            }
-            Divider().frame(width: 150)
-            Text("© 2025 DevSource Team").font(.system(size: 11))
-                .foregroundStyle(Color.secondary.opacity(0.6))
-            Spacer()
         }
     }
 }
