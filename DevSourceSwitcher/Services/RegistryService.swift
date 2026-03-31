@@ -33,8 +33,11 @@ final class RegistryService: SourceConfigServiceProtocol {
             "[http]",
             "[https]"
         ]
+        let keys = ["proxy", "http.proxy", "https.proxy"]
         for section in sections {
-            if let val = getValueFromSection(lines, section: section, key: "proxy") { return val }
+            for key in keys {
+                if let val = getValueFromSection(lines, section: section, key: key) { return val }
+            }
         }
         return nil
     }
@@ -64,12 +67,15 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func parseYarnRegistry(from content: String) -> String? {
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard
-                !trimmed.hasPrefix("#"),
-                trimmed.lowercased().hasPrefix("registry ") else { continue }
-            return trimmed.dropFirst("registry ".count)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            guard !trimmed.hasPrefix("#"), !trimmed.isEmpty else { continue }
+
+            let parts = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            if parts.count >= 2 {
+                let key = parts[0].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+                if key == "registry" {
+                    return parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                }
+            }
         }
         return nil
     }
@@ -103,7 +109,7 @@ final class RegistryService: SourceConfigServiceProtocol {
         {
             lines.removeLast()
         }
-        lines.append("")
+        if !lines.isEmpty { lines.append("") }
         try lines.joined(separator: "\n").write(to: fileURL, atomically: true, encoding: .utf8)
     }
 
@@ -113,8 +119,11 @@ final class RegistryService: SourceConfigServiceProtocol {
             "[http \"https://github.com\"]",
             "[https \"https://github.com\"]"
         ]
+        let proxyKeys = ["proxy", "http.proxy", "https.proxy"]
         for s in global + github {
-            lines = removeKeyFromSection(lines, section: s, key: "proxy")
+            for key in proxyKeys {
+                lines = removeKeyFromSection(lines, section: s, key: key)
+            }
         }
         if !proxy.isEmpty {
             for s in onlyGithub ? github : global {
@@ -207,7 +216,9 @@ final class RegistryService: SourceConfigServiceProtocol {
         } else if type == .yarn {
             lines.removeAll { line in
                 let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                return !t.hasPrefix("#") && t.lowercased().hasPrefix("\(key.lowercased()) ")
+                guard !t.hasPrefix("#"), !t.isEmpty else { return false }
+                let parts = t.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                return parts.count >= 2 && parts[0].lowercased() == "registry"
             }
             lines.insert("\(key) \"\(url)\"", at: 0)
         } else {
@@ -276,7 +287,6 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func httpHost(from url: String) -> String? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        // 核心修复点：仅在 URL 为 http:// 时提取 host，https 必须返回 nil 触发清理逻辑
         guard trimmed.lowercased().hasPrefix("http://") else { return nil }
         guard let comp = URLComponents(string: trimmed), let host = comp.host else { return nil }
         return host

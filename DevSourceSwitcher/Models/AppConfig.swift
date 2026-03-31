@@ -46,17 +46,14 @@ struct AppConfig: Codable {
         defaultNpmSourceId = try container.decode(UUID.self, forKey: .defaultNpmSourceId)
         defaultPipSourceId = try container.decode(UUID.self, forKey: .defaultPipSourceId)
 
-        // 严格对齐原始代码兼容逻辑
-        let defaults = AppConfig.defaultYarnSources()
+        let defaults = AppConfig.defaultConfig()
         yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources)) ?? defaults
             .sources
         defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId)) ??
             defaults.defaultId
 
-        // Git 字段兼容性处理，防止旧版 config.json 导致解码失败
-        gitSources = (try? container.decode([SourceItem].self, forKey: .gitSources)) ?? []
-        defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ??
-            UUID()
+        gitSources = (try? container.decode([SourceItem].self, forKey: .gitSources)) ?? defaults.gitSources
+        defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ?? defaults.defaultGitSourceId
         gitOnlyGithub = (try? container.decode(Bool.self, forKey: .gitOnlyGithub)) ?? true
     }
 
@@ -104,7 +101,6 @@ struct AppConfig: Codable {
         return (sources: [yarnOfficial, yarnAliyun], defaultId: yarnAliyun.id)
     }
 
-    /// --- 完全还原计算属性，保证 View 层绑定不断档 ---
     var defaultNpmSource: SourceItem? {
         npmSources.first { $0.id == defaultNpmSourceId } ?? npmSources.first
     }

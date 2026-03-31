@@ -15,8 +15,16 @@ struct SourceItem: Codable, Identifiable, Equatable, Hashable {
 
     var isValidURL: Bool {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return false }
+
+        // 增强校验：允许用户输入不带协议头的域名
+        var testURL = trimmed
+        if !testURL.contains("://") {
+            testURL = "https://" + testURL
+        }
+
         guard
-            let components = URLComponents(string: trimmed),
+            let components = URLComponents(string: testURL),
             let scheme = components.scheme?.lowercased(),
             ["https", "http", "socks5", "socks5h", "socks4", "socks"].contains(scheme),
             components.host?.isEmpty == false else { return false }
@@ -25,20 +33,18 @@ struct SourceItem: Codable, Identifiable, Equatable, Hashable {
 
     var normalizedURL: String {
         let lowercasedURL = url.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleaned = lowercasedURL
+        var cleaned = lowercasedURL
             .replacingOccurrences(of: "\"", with: "")
             .replacingOccurrences(of: "'", with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
 
-        // Git 代理特殊处理：保留所有协议头（包括 http）以确保匹配的唯一性
-        // NPM/PIP 保持传统：剔除 http(s) 以实现最大兼容
         if cleaned.contains("://") {
-            if cleaned.hasPrefix("socks") || cleaned.contains("proxy") { return cleaned }
+            // 对于非 Git 代理协议，剔除 http(s) 协议头
+            if !cleaned.hasPrefix("socks") && !cleaned.contains("proxy") {
+                cleaned = cleaned.replacingOccurrences(of: "https://", with: "")
+                    .replacingOccurrences(of: "http://", with: "")
+            }
         }
 
-        return cleaned
-            .replacingOccurrences(of: "https://", with: "")
-            .replacingOccurrences(of: "http://", with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        return cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
     }
 }
