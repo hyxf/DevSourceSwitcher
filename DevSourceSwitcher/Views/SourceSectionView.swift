@@ -66,12 +66,20 @@ struct SourceSectionView: View {
                 set: { id in
                     viewModel.updateDefault(type: type, id: id == unselectedID ? nil : id)
                 })) {
-                    if viewModel.activeSourceId(for: type) == nil {
+                    // 逻辑修正：无论是否选中，都保留“关闭/未启用”占位符，以便用户切换回未启用状态
+                    if let activeId = viewModel.activeSourceId(for: type) {
+                        // 当前有选中项，显示“未启用”作为可选项
+                        Text("未启用").tag(unselectedID)
+                    } else {
+                        // 当前无选中项（可能是自定义或确实未启用）
                         let currentVal = RegistryService.shared.currentRegistryURL(for: type) ?? ""
                         Text(currentVal.isEmpty ? "未启用" : (type == .git ? "自定义代理" : "自定义源"))
                             .tag(unselectedID)
                     }
-                    ForEach(viewModel.sources(for: type)) { Text($0.name).tag($0.id) }
+
+                    ForEach(viewModel.sources(for: type)) { source in
+                        Text(source.name).tag(source.id)
+                    }
                 }
                 .pickerStyle(.menu).frame(width: 160)
         }
