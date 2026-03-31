@@ -18,11 +18,15 @@ struct SettingsView: View {
                 .tabItem { Label("PIP 源", systemImage: "shippingbox") }
                 .tag(2)
 
+            SourceDetailView(viewModel: viewModel, type: .git)
+                .tabItem { Label("Git 代理", systemImage: "terminal") }
+                .tag(3)
+
             GeneralSettingsView(viewModel: viewModel)
                 .tabItem { Label("通用", systemImage: "gearshape") }
-                .tag(3)
+                .tag(4)
         }
-        .frame(width: 600, height: 440)
+        .frame(width: 600, height: 380) // 窗口高度增加至 380
         .alert("切换失败", isPresented: Binding(
             get: { viewModel.lastError != nil },
             set: { if !$0 { viewModel.clearLastError() } }))
@@ -111,11 +115,12 @@ struct SettingsHeader: View {
     let icon: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .foregroundStyle(Color.accentColor)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
+                .frame(width: 20, alignment: .center)
             Text(title).font(.system(size: 15, weight: .bold))
         }
+        .foregroundStyle(Color.accentColor)
     }
 }

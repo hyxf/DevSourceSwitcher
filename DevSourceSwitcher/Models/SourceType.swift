@@ -4,6 +4,7 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
     case npm = "NPM"
     case pip = "PIP"
     case yarn = "Yarn"
+    case git = "Git"
 
     var id: String {
         rawValue
@@ -18,18 +19,17 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
         case .npm: ".npmrc"
         case .pip: "pip.conf"
         case .yarn: ".yarnrc"
+        case .git: ".gitconfig"
         }
     }
 
     var configDirectory: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         switch self {
-        case .npm:
+        case .npm, .yarn, .git:
             return home
         case .pip:
             return home.appendingPathComponent(".pip", isDirectory: true)
-        case .yarn:
-            return home
         }
     }
 
@@ -39,9 +39,9 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
 
     var registryKey: String {
         switch self {
-        case .npm: "registry"
+        case .npm, .yarn: "registry"
         case .pip: "index-url"
-        case .yarn: "registry"
+        case .git: "proxy"
         }
     }
 
@@ -50,6 +50,7 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
         case .npm: "https://registry.npmjs.org"
         case .pip: "https://pypi.org/simple"
         case .yarn: "https://registry.yarnpkg.com"
+        case .git: ""
         }
     }
 }

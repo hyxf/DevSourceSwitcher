@@ -9,6 +9,7 @@ final class SourceManager: ObservableObject {
     @Published private(set) var activeNpmSourceId: UUID?
     @Published private(set) var activeYarnSourceId: UUID?
     @Published private(set) var activePipSourceId: UUID?
+    @Published private(set) var activeGitSourceId: UUID?
     @Published var lastError: String?
 
     private let storage = ConfigStorageService.shared
@@ -21,9 +22,7 @@ final class SourceManager: ObservableObject {
 
         NotificationCenter.default.publisher(for: .configDidChange)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.refreshActiveSources()
-            }
+            .sink { [weak self] _ in self?.refreshActiveSources() }
             .store(in: &cancellables)
     }
 
@@ -32,6 +31,7 @@ final class SourceManager: ObservableObject {
         activeNpmSourceId = resolveActiveId(for: .npm)
         activeYarnSourceId = resolveActiveId(for: .yarn)
         activePipSourceId = resolveActiveId(for: .pip)
+        activeGitSourceId = resolveActiveId(for: .git)
     }
 
     func selectSource(_ source: SourceItem?, for type: SourceType) {
@@ -41,8 +41,14 @@ final class SourceManager: ObservableObject {
             refreshActiveSources()
         } catch {
             lastError = error.localizedDescription
-            print("[SourceManager] 切换失败: \(error.localizedDescription)")
         }
+    }
+
+    func toggleGitOnlyGithub() {
+        config.gitOnlyGithub.toggle()
+        saveConfig()
+        let currentSource = config.gitSources.first { $0.id == activeGitSourceId }
+        selectSource(currentSource, for: .git)
     }
 
     func saveConfig() {

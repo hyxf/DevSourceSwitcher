@@ -11,9 +11,7 @@ final class SettingsViewModel: ObservableObject {
     init() {
         manager.objectWillChange
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
+            .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
     }
 
@@ -21,20 +19,13 @@ final class SettingsViewModel: ObservableObject {
         manager.config
     }
 
-    var activeNpmSourceId: UUID? {
-        manager.activeNpmSourceId
-    }
-
-    var activeYarnSourceId: UUID? {
-        manager.activeYarnSourceId
-    }
-
-    var activePipSourceId: UUID? {
-        manager.activePipSourceId
-    }
-
     var lastError: String? {
         manager.lastError
+    }
+
+    var gitOnlyGithub: Bool {
+        get { config.gitOnlyGithub }
+        set { manager.toggleGitOnlyGithub() }
     }
 
     func sources(for type: SourceType) -> [SourceItem] {
@@ -43,14 +34,16 @@ final class SettingsViewModel: ObservableObject {
 
     func activeSourceId(for type: SourceType) -> UUID? {
         switch type {
-        case .npm: activeNpmSourceId
-        case .yarn: activeYarnSourceId
-        case .pip: activePipSourceId
+        case .npm: manager.activeNpmSourceId
+        case .yarn: manager.activeYarnSourceId
+        case .pip: manager.activePipSourceId
+        case .git: manager.activeGitSourceId
         }
     }
 
-    func updateDefault(type: SourceType, id: UUID) {
-        let source = config.sources(for: type).first { $0.id == id }
+    /// 修改点：id 改为可选类型，支持传入 nil 以关闭代理/恢复官方源
+    func updateDefault(type: SourceType, id: UUID?) {
+        let source = id == nil ? nil : config.sources(for: type).first { $0.id == id }
         manager.selectSource(source, for: type)
     }
 
@@ -61,6 +54,7 @@ final class SettingsViewModel: ObservableObject {
         case .npm: manager.config.npmSources.append(item)
         case .yarn: manager.config.yarnSources.append(item)
         case .pip: manager.config.pipSources.append(item)
+        case .git: manager.config.gitSources.append(item)
         }
         manager.saveConfig()
         return true
@@ -69,20 +63,36 @@ final class SettingsViewModel: ObservableObject {
     func updateSource(type: SourceType, id: UUID, name: String, url: String) -> Bool {
         guard validate(name: name, url: url, for: type, excludeId: id) else { return false }
         switch type {
-        case .npm:
-            if let idx = manager.config.npmSources.firstIndex(where: { $0.id == id }) {
-                manager.config.npmSources[idx].name = name.trimmed
-                manager.config.npmSources[idx].url = url.trimmed
+        case .npm: if
+            let i = manager.config.npmSources
+                .firstIndex(where: { $0.id == id })
+            {
+                manager.config.npmSources[i].name = name.trimmed; manager.config.npmSources[i]
+                    .url = url
+                    .trimmed
             }
-        case .yarn:
-            if let idx = manager.config.yarnSources.firstIndex(where: { $0.id == id }) {
-                manager.config.yarnSources[idx].name = name.trimmed
-                manager.config.yarnSources[idx].url = url.trimmed
+        case .yarn: if
+            let i = manager.config.yarnSources
+                .firstIndex(where: { $0.id == id })
+            {
+                manager.config.yarnSources[i].name = name.trimmed; manager.config.yarnSources[i]
+                    .url = url.trimmed
             }
-        case .pip:
-            if let idx = manager.config.pipSources.firstIndex(where: { $0.id == id }) {
-                manager.config.pipSources[idx].name = name.trimmed
-                manager.config.pipSources[idx].url = url.trimmed
+        case .pip: if
+            let i = manager.config.pipSources
+                .firstIndex(where: { $0.id == id })
+            {
+                manager.config.pipSources[i].name = name.trimmed; manager.config.pipSources[i]
+                    .url = url
+                    .trimmed
+            }
+        case .git: if
+            let i = manager.config.gitSources
+                .firstIndex(where: { $0.id == id })
+            {
+                manager.config.gitSources[i].name = name.trimmed; manager.config.gitSources[i]
+                    .url = url
+                    .trimmed
             }
         }
         manager.saveConfig()
@@ -95,6 +105,7 @@ final class SettingsViewModel: ObservableObject {
         case .npm: manager.config.npmSources.removeAll { $0.id == item.id }
         case .yarn: manager.config.yarnSources.removeAll { $0.id == item.id }
         case .pip: manager.config.pipSources.removeAll { $0.id == item.id }
+        case .git: manager.config.gitSources.removeAll { $0.id == item.id }
         }
         manager.saveConfig()
     }
@@ -103,12 +114,6 @@ final class SettingsViewModel: ObservableObject {
         let defaults = AppConfig.defaultConfig()
         manager.config = defaults
         manager.saveConfig()
-        manager.selectSource(defaults.defaultNpmSource, for: .npm)
-        manager.selectSource(defaults.defaultYarnSource, for: .yarn)
-        manager.selectSource(defaults.defaultPipSource, for: .pip)
-    }
-
-    func refresh() {
         manager.refreshActiveSources()
     }
 
@@ -126,21 +131,21 @@ final class SettingsViewModel: ObservableObject {
         for type: SourceType,
         excludeId: UUID? = nil) -> Bool
     {
-        let trimmedName = name.trimmed
-        if trimmedName.isEmpty { validationError = "名称不能为空"; return false }
-        let existing = sources(for: type).filter { $0.id != excludeId }
-        if existing.contains(where: { $0.name == trimmedName }) {
+        if name.trimmed.isEmpty { validationError = "名称不能为空"; return false }
+        if
+            sources(for: type).filter({ $0.id != excludeId })
+                .contains(where: { $0.name == name.trimmed })
+        {
             validationError = "已存在同名源"; return false
         }
-        let candidate = SourceItem(name: trimmedName, url: url.trimmed)
-        if !candidate.isValidURL { validationError = "URL 格式无效"; return false }
+        if
+            !SourceItem(name: name, url: url.trimmed)
+                .isValidURL { validationError = "URL 格式无效"; return false }
         validationError = nil
         return true
     }
 }
 
-private extension String {
-    var trimmed: String {
-        trimmingCharacters(in: .whitespaces)
-    }
-}
+private extension String { var trimmed: String {
+    trimmingCharacters(in: .whitespaces)
+} }

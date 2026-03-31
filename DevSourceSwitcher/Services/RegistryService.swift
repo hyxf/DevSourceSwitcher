@@ -11,27 +11,52 @@ final class RegistryService: SourceConfigServiceProtocol {
     }
 
     func currentRegistryURL(for type: SourceType) -> String? {
-        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
-            return nil
-        }
-        if type == .yarn {
-            return parseYarnRegistry(from: content)
-        }
+        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else { return nil }
+        if type == .yarn { return parseYarnRegistry(from: content) }
+        if type == .git { return parseGitProxy(from: content) }
         return FileParser.parseValue(from: content, key: type.registryKey)
     }
 
-    // MARK: - Private
+    // MARK: - Git Parsing
+
+    private func parseGitProxy(from content: String) -> String? {
+        let lines = content.components(separatedBy: .newlines)
+        // 遵循 Git 优先级：优先特定域名配置，再回退到全局
+        let sections = [
+            "[http \"https://github.com\"]",
+            "[https \"https://github.com\"]",
+            "[http]",
+            "[https]"
+        ]
+        for section in sections {
+            if let val = getValueFromSection(lines, section: section, key: "proxy") { return val }
+        }
+        return nil
+    }
+
+    private func getValueFromSection(_ lines: [String], section: String, key: String) -> String? {
+        var inSection = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.lowercased() == section.lowercased() { inSection = true; continue }
+            if inSection, trimmed.hasPrefix("[") { break }
+            if inSection, let eqRange = trimmed.range(of: "=") {
+                let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                if k == key {
+                    return trimmed[eqRange.upperBound...].trimmingCharacters(in: .whitespaces)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                }
+            }
+        }
+        return nil
+    }
 
     private func parseYarnRegistry(from content: String) -> String? {
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("#") else { continue }
-            guard trimmed.hasPrefix("registry ") else { continue }
-            let value = trimmed
-                .dropFirst("registry ".count)
-                .trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#"), trimmed.hasPrefix("registry ") else { continue }
+            return trimmed.dropFirst("registry ".count).trimmingCharacters(in: .whitespaces)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            return value.isEmpty ? nil : value
         }
         return nil
     }
@@ -49,28 +74,85 @@ final class RegistryService: SourceConfigServiceProtocol {
 
         let existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
         var lines = existing.components(separatedBy: .newlines)
-        lines = updatedContent(lines, url: targetURL, for: type)
 
-        if type == .pip {
-            let host = httpHost(from: targetURL)
-            lines = updateTrustedHost(lines, host: host)
+        if type == .git {
+            let onlyGithub = ConfigStorageService.shared.load().gitOnlyGithub
+            lines = updateGitProxy(lines, proxy: targetURL, onlyGithub: onlyGithub)
+        } else {
+            lines = updatedContent(lines, url: targetURL, for: type)
+            if type == .pip {
+                let host = httpHost(from: targetURL)
+                lines = updateTrustedHost(lines, host: host)
+            }
         }
 
-        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
+        // 完全还原原始逻辑：清理尾部空行
+        while
+            lines.last?.trimmingCharacters(in: .whitespaces)
+                .isEmpty == true
+        {
             lines.removeLast()
         }
         lines.append("")
-
         try lines.joined(separator: "\n").write(to: fileURL, atomically: true, encoding: .utf8)
     }
 
-    private func httpHost(from url: String) -> String? {
-        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            trimmed.lowercased().hasPrefix("http://"),
-            let components = URLComponents(string: trimmed),
-            let host = components.host, !host.isEmpty else { return nil }
-        return host
+    // MARK: - Git Writing (完美复刻 Section 清理算法)
+
+    private func updateGitProxy(_ lines: [String], proxy: String, onlyGithub: Bool) -> [String] {
+        var lines = lines
+        let global = ["[http]", "[https]"], github = [
+            "[http \"https://github.com\"]",
+            "[https \"https://github.com\"]"
+        ]
+
+        // 彻底清理历史相关项
+        for s in global + github {
+            lines = removeKeyFromSection(lines, section: s, key: "proxy")
+        }
+
+        // 写入新配置
+        if !proxy.isEmpty {
+            for s in onlyGithub ? github : global {
+                lines = addOrUpdateKeyInSection(
+                    lines,
+                    section: s,
+                    key: "proxy",
+                    value: proxy)
+            }
+        }
+        return lines
+    }
+
+    private func removeKeyFromSection(_ lines: [String], section: String, key: String) -> [String] {
+        var lines = lines, i = 0, inSection = false
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if trimmed.lowercased() == section.lowercased() { inSection = true; i += 1; continue }
+            if inSection, trimmed.hasPrefix("[") { inSection = false }
+            if inSection, let eqRange = trimmed.range(of: "=") {
+                if trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key {
+                    lines.remove(at: i); continue
+                }
+            }
+            i += 1
+        }
+        // 完全复刻原版 PIP 逻辑：若节变空，则移除标题及上方空行
+        if
+            let idx = lines
+                .firstIndex(where: {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased() == section.lowercased()
+                })
+        {
+            if isSectionEmpty(lines, afterIndex: idx) {
+                lines.remove(at: idx)
+                if
+                    idx > 0,
+                    lines[idx - 1].trimmingCharacters(in: .whitespaces)
+                        .isEmpty { lines.remove(at: idx - 1) }
+            }
+        }
+        return lines
     }
 
     private func isSectionEmpty(_ lines: [String], afterIndex sectionIdx: Int) -> Bool {
@@ -82,107 +164,113 @@ final class RegistryService: SourceConfigServiceProtocol {
         return true
     }
 
-    private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
+    private func addOrUpdateKeyInSection(
+        _ lines: [String],
+        section: String,
+        key: String,
+        value: String) -> [String]
+    {
         var lines = lines
-        let key = "trusted-host"
-
         if
-            let installIdx = lines.firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespaces).lowercased() == "[install]"
-            })
+            let idx = lines
+                .firstIndex(where: {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased() == section.lowercased()
+                })
         {
-            var foundIdx: Int?
-            for i in (installIdx + 1) ..< lines.count {
-                let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("[") { break }
-                if let eqRange = trimmed.range(of: "=") {
-                    let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
-                    if k == key {
-                        foundIdx = i
-                        break
-                    }
-                }
-            }
-
-            if let host {
-                if let idx = foundIdx {
-                    lines[idx] = "\(key) = \(host)"
-                } else {
-                    lines.insert("\(key) = \(host)", at: installIdx + 1)
-                }
-            } else {
-                if let idx = foundIdx {
-                    lines.remove(at: idx)
-                }
-                if isSectionEmpty(lines, afterIndex: installIdx) {
-                    lines.remove(at: installIdx)
-                    if
-                        installIdx > 0,
-                        lines[installIdx - 1].trimmingCharacters(in: .whitespaces).isEmpty
-                    {
-                        lines.remove(at: installIdx - 1)
-                    }
-                }
-            }
+            lines.insert("\t\(key) = \(value)", at: idx + 1)
         } else {
-            if let host {
-                lines.append("")
-                lines.append("[install]")
-                lines.append("\(key) = \(host)")
-            }
+            lines.append(""); lines.append(section); lines.append("\t\(key) = \(value)")
         }
-
         return lines
     }
 
     private func updatedContent(_ lines: [String], url: String, for type: SourceType) -> [String] {
-        var lines = lines
-        let key = type.registryKey
-
+        var lines = lines, key = type.registryKey
         if type == .npm {
             lines.removeAll { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                let t = line.trimmingCharacters(in: .whitespaces)
                 guard
-                    !trimmed.hasPrefix("#"), !trimmed.hasPrefix(";"),
-                    let eqRange = trimmed.range(of: "=") else { return false }
-                return trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key
+                    !t.hasPrefix("#"), !t.hasPrefix(";"),
+                    let eq = t.range(of: "=") else { return false }
+                return t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces) == key
             }
             lines.insert("\(key)=\(url)", at: 0)
         } else if type == .yarn {
             lines.removeAll { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.hasPrefix("#") else { return false }
-                return trimmed.hasPrefix("\(key) ")
+                let t = line.trimmingCharacters(in: .whitespaces)
+                return !t.hasPrefix("#") && t.hasPrefix("\(key) ")
             }
             lines.insert("\(key) \"\(url)\"", at: 0)
         } else {
+            // PIP [global] 逻辑
             if
-                let globalIdx = lines.firstIndex(where: {
-                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "[global]"
-                })
+                let idx = lines
+                    .firstIndex(where: {
+                        $0.trimmingCharacters(in: .whitespaces).lowercased() == "[global]"
+                    })
             {
-                var foundInGlobal = false
-                for i in (globalIdx + 1) ..< lines.count {
+                var found = false
+                for i in (idx + 1) ..< lines.count {
                     let line = lines[i].trimmingCharacters(in: .whitespaces)
                     if line.hasPrefix("[") { break }
-                    if let eqRange = line.range(of: "=") {
-                        let k = line[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
-                        if k == key {
-                            lines[i] = "\(key) = \(url)"
-                            foundInGlobal = true
-                            break
-                        }
+                    if
+                        let eq = line.range(of: "="),
+                        line[..<eq.lowerBound].trimmingCharacters(in: .whitespaces) == key
+                    {
+                        lines[i] = "\(key) = \(url)"; found = true; break
                     }
                 }
-                if !foundInGlobal {
-                    lines.insert("\(key) = \(url)", at: globalIdx + 1)
-                }
+                if !found { lines.insert("\(key) = \(url)", at: idx + 1) }
             } else {
-                lines.insert("[global]", at: 0)
-                lines.insert("\(key) = \(url)", at: 1)
+                lines.insert("[global]", at: 0); lines.insert("\(key) = \(url)", at: 1)
             }
         }
-
         return lines
+    }
+
+    private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
+        var lines = lines, key = "trusted-host"
+        // 完全复刻原始 PIP [install] 维护算法
+        if
+            let idx = lines
+                .firstIndex(where: {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "[install]"
+                })
+        {
+            var foundIdx: Int?
+            for i in (idx + 1) ..< lines.count {
+                let t = lines[i].trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("[") { break }
+                if
+                    let eq = t.range(of: "="),
+                    t[..<eq.lowerBound]
+                        .trimmingCharacters(in: .whitespaces) == key { foundIdx = i; break }
+            }
+            if let host {
+                if let f = foundIdx { lines[f] = "\(key) = \(host)" } else { lines.insert(
+                    "\(key) = \(host)",
+                    at: idx + 1) }
+            } else {
+                if let f = foundIdx { lines.remove(at: f) }
+                if isSectionEmpty(lines, afterIndex: idx) {
+                    lines.remove(at: idx)
+                    if
+                        idx > 0,
+                        lines[idx - 1].trimmingCharacters(in: .whitespaces)
+                            .isEmpty { lines.remove(at: idx - 1) }
+                }
+            }
+        } else if let host {
+            lines.append(""); lines.append("[install]"); lines.append("\(key) = \(host)")
+        }
+        return lines
+    }
+
+    private func httpHost(from url: String) -> String? {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            trimmed.lowercased().hasPrefix("http://"), let comp = URLComponents(string: trimmed),
+            let host = comp.host else { return nil }
+        return host
     }
 }

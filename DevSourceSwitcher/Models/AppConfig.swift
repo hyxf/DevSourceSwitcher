@@ -4,33 +4,39 @@ struct AppConfig: Codable {
     var npmSources: [SourceItem]
     var yarnSources: [SourceItem]
     var pipSources: [SourceItem]
+    var gitSources: [SourceItem]
     var defaultNpmSourceId: UUID
     var defaultYarnSourceId: UUID
     var defaultPipSourceId: UUID
+    var defaultGitSourceId: UUID
+    var gitOnlyGithub: Bool
 
     enum CodingKeys: String, CodingKey {
-        case npmSources
-        case yarnSources
-        case pipSources
-        case defaultNpmSourceId
-        case defaultYarnSourceId
-        case defaultPipSourceId
+        case npmSources, yarnSources, pipSources, gitSources
+        case defaultNpmSourceId, defaultYarnSourceId, defaultPipSourceId, defaultGitSourceId
+        case gitOnlyGithub
     }
 
     init(
         npmSources: [SourceItem],
         yarnSources: [SourceItem],
         pipSources: [SourceItem],
+        gitSources: [SourceItem],
         defaultNpmSourceId: UUID,
         defaultYarnSourceId: UUID,
-        defaultPipSourceId: UUID)
+        defaultPipSourceId: UUID,
+        defaultGitSourceId: UUID,
+        gitOnlyGithub: Bool)
     {
         self.npmSources = npmSources
         self.yarnSources = yarnSources
         self.pipSources = pipSources
+        self.gitSources = gitSources
         self.defaultNpmSourceId = defaultNpmSourceId
         self.defaultYarnSourceId = defaultYarnSourceId
         self.defaultPipSourceId = defaultPipSourceId
+        self.defaultGitSourceId = defaultGitSourceId
+        self.gitOnlyGithub = gitOnlyGithub
     }
 
     init(from decoder: Decoder) throws {
@@ -40,16 +46,21 @@ struct AppConfig: Codable {
         defaultNpmSourceId = try container.decode(UUID.self, forKey: .defaultNpmSourceId)
         defaultPipSourceId = try container.decode(UUID.self, forKey: .defaultPipSourceId)
 
-        // 兼容旧版本 config.json（不含 yarn 字段）
+        // 严格对齐原始代码兼容逻辑
         let defaults = AppConfig.defaultYarnSources()
-        yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources))
-            ?? defaults.sources
-        defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId))
-            ?? defaults.defaultId
+        yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources)) ?? defaults
+            .sources
+        defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId)) ??
+            defaults.defaultId
+
+        // Git 字段兼容性处理，防止旧版 config.json 导致解码失败
+        gitSources = (try? container.decode([SourceItem].self, forKey: .gitSources)) ?? []
+        defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ??
+            UUID()
+        gitOnlyGithub = (try? container.decode(Bool.self, forKey: .gitOnlyGithub)) ?? true
     }
 
     static func defaultConfig() -> AppConfig {
-        // ------
         let npmOfficial = SourceItem(
             name: "官方源",
             url: "https://registry.npmjs.org",
@@ -58,29 +69,29 @@ struct AppConfig: Codable {
             name: "阿里源",
             url: "https://registry.npmmirror.com",
             isBuiltIn: true)
-        // ------
         let yarn = defaultYarnSources()
-        // ------
         let pipOfficial = SourceItem(name: "官方源", url: "https://pypi.org/simple/", isBuiltIn: true)
-        let pipTsinghua = SourceItem(
-            name: "清华源",
-            url: "https://pypi.tuna.tsinghua.edu.cn/simple/",
-            isBuiltIn: true)
         let pipAliyun = SourceItem(
             name: "阿里源",
             url: "http://mirrors.aliyun.com/pypi/simple/",
+            isBuiltIn: true)
+        let gitDefault = SourceItem(
+            name: "本地 SOCKS5",
+            url: "socks5h://127.0.0.1:7891",
             isBuiltIn: true)
 
         return AppConfig(
             npmSources: [npmOfficial, npmAliyun],
             yarnSources: yarn.sources,
-            pipSources: [pipOfficial, pipAliyun, pipTsinghua],
+            pipSources: [pipOfficial, pipAliyun],
+            gitSources: [gitDefault],
             defaultNpmSourceId: npmAliyun.id,
             defaultYarnSourceId: yarn.defaultId,
-            defaultPipSourceId: pipAliyun.id)
+            defaultPipSourceId: pipAliyun.id,
+            defaultGitSourceId: gitDefault.id,
+            gitOnlyGithub: true)
     }
 
-    /// 提取为独立方法，方便 init(from:) 复用
     static func defaultYarnSources() -> (sources: [SourceItem], defaultId: UUID) {
         let yarnOfficial = SourceItem(
             name: "官方源",
@@ -93,49 +104,41 @@ struct AppConfig: Codable {
         return (sources: [yarnOfficial, yarnAliyun], defaultId: yarnAliyun.id)
     }
 
-    /// 当前默认 NPM 源；若 ID 失效则回退到第一项
+    /// --- 完全还原计算属性，保证 View 层绑定不断档 ---
     var defaultNpmSource: SourceItem? {
         npmSources.first { $0.id == defaultNpmSourceId } ?? npmSources.first
     }
 
-    /// 当前默认 Yarn 源；若 ID 失效则回退到第一项
     var defaultYarnSource: SourceItem? {
         yarnSources.first { $0.id == defaultYarnSourceId } ?? yarnSources.first
     }
 
-    /// 当前默认 PIP 源；若 ID 失效则回退到第一项
     var defaultPipSource: SourceItem? {
         pipSources.first { $0.id == defaultPipSourceId } ?? pipSources.first
     }
 
-    /// 根据类型取对应源列表
+    var defaultGitSource: SourceItem? {
+        gitSources.first { $0.id == defaultGitSourceId } ?? gitSources.first
+    }
+
     func sources(for type: SourceType) -> [SourceItem] {
         switch type {
-        case .npm: npmSources
-        case .yarn: yarnSources
-        case .pip: pipSources
+        case .npm: npmSources case .yarn: yarnSources case .pip: pipSources case .git: gitSources
         }
     }
 
-    /// 根据类型取当前默认源
     func defaultSource(for type: SourceType) -> SourceItem? {
         switch type {
-        case .npm: defaultNpmSource
-        case .yarn: defaultYarnSource
-        case .pip: defaultPipSource
+        case .npm: defaultNpmSource case .yarn: defaultYarnSource case .pip: defaultPipSource case .git: defaultGitSource
         }
     }
 
-    /// 根据类型取默认源 ID
     func defaultSourceId(for type: SourceType) -> UUID {
         switch type {
-        case .npm: defaultNpmSourceId
-        case .yarn: defaultYarnSourceId
-        case .pip: defaultPipSourceId
+        case .npm: defaultNpmSourceId case .yarn: defaultYarnSourceId case .pip: defaultPipSourceId case .git: defaultGitSourceId
         }
     }
 
-    /// 将 url 规范化后在源列表里匹配，返回匹配到的源 ID。
     func matchedSourceId(for type: SourceType, url: String) -> UUID? {
         let normalized = SourceItem(name: "", url: url).normalizedURL
         return sources(for: type).first { $0.normalizedURL == normalized }?.id

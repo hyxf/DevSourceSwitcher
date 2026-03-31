@@ -3,6 +3,10 @@
   "groups" : {
     "Default" : [
       "DevSourceSwitcher/App/DevSourceSwitcherApp.swift",
+      "DevSourceSwitcher/Assets.xcassets/AccentColor.colorset/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/MenuBarIcon.imageset/Contents.json",
       "DevSourceSwitcher/Info.plist",
       "DevSourceSwitcher/Models/AppConfig.swift",
       "DevSourceSwitcher/Models/SourceItem.swift",

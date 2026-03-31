@@ -12,7 +12,8 @@ struct SourceEditorView: View {
     let onDismiss: () -> Void
 
     @State private var name: String = ""
-    @State private var url: String = ""
+    @State private var protocolType: String = "socks5h://"
+    @State private var host: String = ""
 
     private var title: String {
         switch mode {
@@ -21,9 +22,16 @@ struct SourceEditorView: View {
         }
     }
 
+    private var sourceType: SourceType {
+        switch mode {
+        case let .add(t): t
+        case let .edit(_, t): t
+        }
+    }
+
     private var isSaveDisabled: Bool {
         name.trimmingCharacters(in: .whitespaces).isEmpty ||
-            url.trimmingCharacters(in: .whitespaces).isEmpty
+            host.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
@@ -32,7 +40,24 @@ struct SourceEditorView: View {
 
             Form {
                 TextField("名称", text: $name)
-                TextField("URL（https://...）", text: $url)
+                if sourceType == .git {
+                    HStack(spacing: 8) {
+                        Picker("", selection: $protocolType) {
+                            ForEach(
+                                ["http://", "https://", "socks5://", "socks5h://"],
+                                id: \.self)
+                            {
+                                Text($0)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 100)
+
+                        TextField("127.0.0.1:7891", text: $host)
+                    }
+                } else {
+                    TextField("URL（https://...）", text: $host)
+                }
             }
             .formStyle(.grouped)
 
@@ -50,7 +75,10 @@ struct SourceEditorView: View {
                     .keyboardShortcut(.cancelAction)
 
                 Button("保存") {
-                    if onSave(name, url) { onDismiss() }
+                    let finalURL = sourceType == .git ?
+                        "\(protocolType)\(host.trimmingCharacters(in: .whitespaces))" : host
+                        .trimmingCharacters(in: .whitespaces)
+                    if onSave(name, finalURL) { onDismiss() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(isSaveDisabled)
@@ -59,9 +87,19 @@ struct SourceEditorView: View {
         .padding(20)
         .frame(width: 380)
         .onAppear {
-            if case let .edit(item, _) = mode {
+            if case let .edit(item, type) = mode {
                 name = item.name
-                url = item.url
+                if type == .git {
+                    let protocols = ["socks5h://", "socks5://", "https://", "http://"]
+                    if let proto = protocols.first(where: { item.url.hasPrefix($0) }) {
+                        protocolType = proto
+                        host = String(item.url.dropFirst(proto.count))
+                    } else {
+                        host = item.url
+                    }
+                } else {
+                    host = item.url
+                }
             }
         }
     }
