@@ -11,7 +11,8 @@ targets:
     platform: macOS
 
     sources:
-      - DevSourceSwitcher
+      - path: DevSourceSwitcher
+        type: group
 
     settings:
       base:
@@ -19,11 +20,9 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: DevSourceSwitcher/Info.plist
         ENABLE_APP_SANDBOX: NO
 
     info:
-      properties:
-        CFBundleName: Dev Source Switcher
-        CFBundleDisplayName: Dev Source Switcher
-        LSUIElement: YES
-        NSSupportsAutomaticGraphicsSwitching: YES
+      path: DevSourceSwitcher/Info.plist
