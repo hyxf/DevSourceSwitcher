@@ -33,7 +33,7 @@ struct SourceSectionView: View {
     private func configFileButton(for configType: SourceType) -> some View {
         HStack(spacing: 4) {
             Text("配置文件：")
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Button(configType.configPath.path) {
                 let url = configType.configPath
@@ -58,7 +58,7 @@ struct SourceSectionView: View {
                 openWindow(value: ConfigContent(path: path, content: text))
             }
             .buttonStyle(.plain)
-            .font(.system(size: 11, design: .monospaced))
+            .font(.system(size: 12, design: .monospaced))
             .foregroundStyle(Color.accentColor)
             Spacer()
         }
@@ -66,7 +66,7 @@ struct SourceSectionView: View {
 
     private var defaultSourcePicker: some View {
         HStack {
-            Text("当前生效源").font(.system(size: 13))
+            Text("当前生效源").font(.system(size: 14))
             Spacer()
             Picker("", selection: Binding(
                 get: { viewModel.activeSourceId(for: type) ?? UUID() },
@@ -82,7 +82,7 @@ struct SourceSectionView: View {
             .pickerStyle(.menu)
             .frame(width: 180)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
+        .padding(.horizontal, 12).padding(.vertical, 9)
         .background(Color.primary.opacity(0.03))
     }
 }

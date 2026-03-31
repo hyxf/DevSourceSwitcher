@@ -44,26 +44,26 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 30) {
+            VStack(spacing: 32) {
                 VStack(alignment: .leading, spacing: 16) {
                     SettingsHeader(title: "启动行为", icon: "power.circle")
 
                     VStack(alignment: .leading, spacing: 1) {
                         HStack {
-                            Text("开机自动启动").font(.system(size: 13))
+                            Text("开机自动启动").font(.system(size: 14))
                             Spacer()
                             LaunchAtLogin.Toggle("")
                                 .toggleStyle(.switch)
                                 .scaleEffect(0.8)
                                 .labelsHidden()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .padding(.horizontal, 12).padding(.vertical, 11)
                         .background(Color.primary.opacity(0.03))
 
                         Text("开启后，应用将在系统登录时自动运行，无需手动打开。")
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                             .foregroundStyle(Color.secondary)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .padding(.horizontal, 12).padding(.vertical, 9)
                     }
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(
@@ -76,10 +76,10 @@ struct GeneralSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("重置为默认配置").font(.system(size: 13))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("重置为默认配置").font(.system(size: 14))
                                 Text("清除所有自定义源，恢复内置默认源列表。")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 12))
                                     .foregroundStyle(Color.secondary)
                             }
                             Spacer()
@@ -88,7 +88,7 @@ struct GeneralSettingsView: View {
                             }
                             .foregroundStyle(.red)
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .padding(.horizontal, 12).padding(.vertical, 11)
                         .background(Color.primary.opacity(0.03))
                     }
                     .cornerRadius(8)
@@ -118,8 +118,8 @@ struct SettingsHeader: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(Color.accentColor)
-                .font(.system(size: 14, weight: .bold))
-            Text(title).font(.system(size: 14, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
+            Text(title).font(.system(size: 15, weight: .bold))
         }
     }
 }
@@ -138,7 +138,7 @@ struct AboutView: View {
                 Text("Version 1.6.0").font(.subheadline).foregroundStyle(Color.secondary)
             }
             Divider().frame(width: 150)
-            Text("© 2025 DevSource Team").font(.system(size: 10))
+            Text("© 2025 DevSource Team").font(.system(size: 11))
                 .foregroundStyle(Color.secondary.opacity(0.6))
             Spacer()
         }

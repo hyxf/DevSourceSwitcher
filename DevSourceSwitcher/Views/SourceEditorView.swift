@@ -7,9 +7,7 @@ struct SourceEditorView: View {
     }
 
     let mode: Mode
-    /// 保存回调；返回 false 表示验证失败（错误由外部传入的 validationError 提供）
     let onSave: (String, String) -> Bool
-    /// 由 ViewModel 提供的验证错误，外部传入保证同步
     let validationError: String?
     let onDismiss: () -> Void
 
@@ -29,7 +27,7 @@ struct SourceEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             Text(title).font(.headline)
 
             Form {
@@ -38,12 +36,11 @@ struct SourceEditorView: View {
             }
             .formStyle(.grouped)
 
-            // 验证错误提示——占位文本保持布局高度稳定，避免弹跳
             Group {
                 if let error = validationError {
-                    Text(error).font(.caption).foregroundStyle(.red)
+                    Text(error).font(.footnote).foregroundStyle(.red)
                 } else {
-                    Text(" ").font(.caption)
+                    Text(" ").font(.footnote)
                 }
             }
 

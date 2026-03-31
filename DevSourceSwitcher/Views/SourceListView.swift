@@ -92,13 +92,13 @@ struct SourceRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(source.name).font(.system(size: 12, weight: .medium))
+                    Text(source.name).font(.system(size: 13, weight: .medium))
 
                     if source.isBuiltIn {
                         Text("系统")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(Capsule().stroke(
                                 Color.secondary.opacity(0.3),
@@ -107,7 +107,7 @@ struct SourceRowView: View {
                     }
                 }
                 Text(source.url)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -118,6 +118,6 @@ struct SourceRowView: View {
                     .foregroundStyle(Color.green.opacity(0.8))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 }
