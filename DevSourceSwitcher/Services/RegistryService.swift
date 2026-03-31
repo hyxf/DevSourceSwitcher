@@ -71,7 +71,8 @@ final class RegistryService: SourceConfigServiceProtocol {
 
             let parts = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             if parts.count >= 2 {
-                let key = parts[0].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+                let key = parts[0].lowercased()
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ":"))
                 if key == "registry" {
                     return parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
                 }

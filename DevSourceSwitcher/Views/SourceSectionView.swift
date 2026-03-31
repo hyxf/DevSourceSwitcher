@@ -66,9 +66,10 @@ struct SourceSectionView: View {
                 set: { id in
                     viewModel.updateDefault(type: type, id: id == unselectedID ? nil : id)
                 })) {
-                    // 统一改为“未启用”
-                    if type == .git || viewModel.activeSourceId(for: type) == nil {
-                        Text("未启用").tag(unselectedID)
+                    if viewModel.activeSourceId(for: type) == nil {
+                        let currentVal = RegistryService.shared.currentRegistryURL(for: type) ?? ""
+                        Text(currentVal.isEmpty ? "未启用" : (type == .git ? "自定义代理" : "自定义源"))
+                            .tag(unselectedID)
                     }
                     ForEach(viewModel.sources(for: type)) { Text($0.name).tag($0.id) }
                 }

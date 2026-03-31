@@ -47,8 +47,19 @@ final class SourceManager: ObservableObject {
     func toggleGitOnlyGithub() {
         config.gitOnlyGithub.toggle()
         saveConfig()
-        let currentSource = config.gitSources.first { $0.id == activeGitSourceId }
-        selectSource(currentSource, for: .git)
+
+        let currentURL = registry.currentRegistryURL(for: .git) ?? ""
+        if let source = config.gitSources.first(where: { $0.id == activeGitSourceId }) {
+            // 如果当前是已知源，重新应用它
+            selectSource(source, for: .git)
+        } else if !currentURL.isEmpty {
+            // 如果当前是自定义代理，以当前 URL 重新应用配置
+            let tempSource = SourceItem(name: "Custom", url: currentURL)
+            selectSource(tempSource, for: .git)
+        } else {
+            // 否则维持未启用状态
+            selectSource(nil, for: .git)
+        }
     }
 
     func saveConfig() {

@@ -39,7 +39,7 @@ struct SourceItem: Codable, Identifiable, Equatable, Hashable {
 
         if cleaned.contains("://") {
             // 对于非 Git 代理协议，剔除 http(s) 协议头
-            if !cleaned.hasPrefix("socks") && !cleaned.contains("proxy") {
+            if !cleaned.hasPrefix("socks"), !cleaned.contains("proxy") {
                 cleaned = cleaned.replacingOccurrences(of: "https://", with: "")
                     .replacingOccurrences(of: "http://", with: "")
             }

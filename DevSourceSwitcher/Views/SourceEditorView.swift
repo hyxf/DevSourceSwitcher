@@ -61,7 +61,6 @@ struct SourceEditorView: View {
                         "socks4://",
                         "socks://"
                     ]
-                    // 审计修正：使用 range(of:options:) 实现大小写不敏感匹配
                     if
                         let foundProto = protocols.first(where: { item.url.range(
                             of: $0,
@@ -76,11 +75,15 @@ struct SourceEditorView: View {
     }
 
     private func sanitizeHost(_ input: String) -> String {
-        let trimmed = input.trimmingCharacters(in: .whitespaces)
+        // 增加对尾部斜杠和前后空格的彻底清理
+        var trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
         let protocols = ["socks5h://", "socks5://", "socks4://", "socks://", "https://", "http://"]
         for proto in protocols {
             if trimmed.range(of: proto, options: [.anchored, .caseInsensitive]) != nil {
-                return String(trimmed.dropFirst(proto.count))
+                trimmed = String(trimmed.dropFirst(proto.count))
+                break
             }
         }
         return trimmed

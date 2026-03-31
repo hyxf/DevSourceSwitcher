@@ -41,19 +41,29 @@ struct AppConfig: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        npmSources = try container.decode([SourceItem].self, forKey: .npmSources)
-        pipSources = try container.decode([SourceItem].self, forKey: .pipSources)
-        defaultNpmSourceId = try container.decode(UUID.self, forKey: .defaultNpmSourceId)
-        defaultPipSourceId = try container.decode(UUID.self, forKey: .defaultPipSourceId)
-
         let defaults = AppConfig.defaultConfig()
-        yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources)) ?? defaults
-            .sources
-        defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId)) ??
-            defaults.defaultId
 
-        gitSources = (try? container.decode([SourceItem].self, forKey: .gitSources)) ?? defaults.gitSources
-        defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ?? defaults.defaultGitSourceId
+        // NPM 为核心字段，若缺失则 App 基础数据不完整，允许抛出
+        npmSources = try container.decode([SourceItem].self, forKey: .npmSources)
+        defaultNpmSourceId = try container.decode(UUID.self, forKey: .defaultNpmSourceId)
+
+        // PIP 兼容逻辑：若旧配置缺失 PIP，回退到默认值
+        pipSources = (try? container.decode([SourceItem].self, forKey: .pipSources)) ?? defaults
+            .pipSources
+        defaultPipSourceId = (try? container.decode(UUID.self, forKey: .defaultPipSourceId)) ??
+            defaults.defaultPipSourceId
+
+        // Yarn 兼容逻辑：若旧配置缺失 Yarn，回退到默认值
+        yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources)) ?? defaults
+            .yarnSources
+        defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId)) ??
+            defaults.defaultYarnSourceId
+
+        // Git 兼容逻辑：处理缺失的 Git 代理配置
+        gitSources = (try? container.decode([SourceItem].self, forKey: .gitSources)) ?? defaults
+            .gitSources
+        defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ??
+            defaults.defaultGitSourceId
         gitOnlyGithub = (try? container.decode(Bool.self, forKey: .gitOnlyGithub)) ?? true
     }
 
