@@ -26,3 +26,8 @@ targets:
 
     info:
       path: DevSourceSwitcher/Info.plist
+      properties:
+        CFBundleName: Dev Source Switcher
+        CFBundleDisplayName: Dev Source Switcher
+        LSUIElement: true
+        NSSupportsAutomaticGraphicsSwitching: true
