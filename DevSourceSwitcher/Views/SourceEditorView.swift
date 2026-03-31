@@ -28,7 +28,7 @@ struct SourceEditorView: View {
                                 Text($0)
                             }
                         }.labelsHidden().frame(width: 100)
-                        TextField("127.0.0.1:7891", text: $host)
+                        TextField("", text: $host)
                     }
                 } else {
                     TextField("URL", text: $host)
@@ -78,8 +78,6 @@ struct SourceEditorView: View {
         var trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
-        // 仅在 Git 模式下剥离协议头，因为 Git 模式下协议是由 Picker 提供的
-        // 对于 NPM/Yarn/PIP，保留用户输入的 http:// 或 https://
         if stripProtocol {
             let protocols = [
                 "socks5h://",
