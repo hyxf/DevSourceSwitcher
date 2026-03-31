@@ -82,9 +82,13 @@ struct AppConfig: Codable {
             name: "阿里源",
             url: "http://mirrors.aliyun.com/pypi/simple/",
             isBuiltIn: true)
-        let gitDefault = SourceItem(
+        let gitSocks5 = SourceItem(
             name: "本地 SOCKS5",
-            url: "socks5h://127.0.0.1:7891",
+            url: "socks5h://127.0.0.1:1086",
+            isBuiltIn: true)
+         let gitHttp = SourceItem(
+            name: "本地 HTTP",
+            url: "http://127.0.0.1:1087",
             isBuiltIn: true)
 
         return AppConfig(
