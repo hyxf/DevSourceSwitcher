@@ -154,7 +154,7 @@ final class RegistryService: SourceConfigServiceProtocol {
                 guard !trimmed.hasPrefix("#") else { return false }
                 return trimmed.hasPrefix("\(key) ")
             }
-            lines.insert("\(key) \(url)", at: 0)
+            lines.insert("\(key) \"\(url)\"", at: 0)
         } else {
             if
                 let globalIdx = lines.firstIndex(where: {
