@@ -41,9 +41,9 @@ struct SourceEditorView: View {
                 Spacer()
                 Button("取消") { onDismiss() }
                 Button("保存") {
-                    let cleanedHost = sanitizeHost(host)
-                    let finalURL = sourceType == .git ? "\(protocolType)\(cleanedHost)" :
-                        cleanedHost
+                    let isGit = (sourceType == .git)
+                    let cleanedHost = sanitizeHost(host, stripProtocol: isGit)
+                    let finalURL = isGit ? "\(protocolType)\(cleanedHost)" : cleanedHost
                     if onSave(name, finalURL) { onDismiss() }
                 }.disabled(name.isEmpty || host.isEmpty).keyboardShortcut(.defaultAction)
             }
@@ -74,16 +74,26 @@ struct SourceEditorView: View {
         }
     }
 
-    private func sanitizeHost(_ input: String) -> String {
-        // 增加对尾部斜杠和前后空格的彻底清理
+    private func sanitizeHost(_ input: String, stripProtocol: Bool) -> String {
         var trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
-        let protocols = ["socks5h://", "socks5://", "socks4://", "socks://", "https://", "http://"]
-        for proto in protocols {
-            if trimmed.range(of: proto, options: [.anchored, .caseInsensitive]) != nil {
-                trimmed = String(trimmed.dropFirst(proto.count))
-                break
+        // 仅在 Git 模式下剥离协议头，因为 Git 模式下协议是由 Picker 提供的
+        // 对于 NPM/Yarn/PIP，保留用户输入的 http:// 或 https://
+        if stripProtocol {
+            let protocols = [
+                "socks5h://",
+                "socks5://",
+                "socks4://",
+                "socks://",
+                "https://",
+                "http://"
+            ]
+            for proto in protocols {
+                if trimmed.range(of: proto, options: [.anchored, .caseInsensitive]) != nil {
+                    trimmed = String(trimmed.dropFirst(proto.count))
+                    break
+                }
             }
         }
         return trimmed
