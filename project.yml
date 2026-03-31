@@ -11,7 +11,7 @@ targets:
     platform: macOS
 
     sources:
-      - path: DevSourceSwitcher
+      - DevSourceSwitcher
 
     settings:
       base:
@@ -26,5 +26,4 @@ targets:
         CFBundleName: Dev Source Switcher
         CFBundleDisplayName: Dev Source Switcher
         LSUIElement: YES
-        LSBackgroundOnly: NO
         NSSupportsAutomaticGraphicsSwitching: YES
