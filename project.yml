@@ -29,5 +29,6 @@ targets:
         CFBundleDisplayName: Dev Source Switcher
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
         LSUIElement: true
         NSSupportsAutomaticGraphicsSwitching: true
