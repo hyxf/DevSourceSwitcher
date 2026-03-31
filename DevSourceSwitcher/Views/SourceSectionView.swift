@@ -62,7 +62,6 @@ struct SourceSectionView: View {
             .foregroundStyle(Color.accentColor)
             Spacer()
         }
-        .frame(height: 16)
     }
 
     private var defaultSourcePicker: some View {
