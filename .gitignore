@@ -13,6 +13,7 @@ xcuserdata/
 # Build results
 *.swiftmodule
 *.swiftdoc
+build
 
 # Temporary files
 *.tmp
