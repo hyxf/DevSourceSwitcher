@@ -2,192 +2,147 @@ import os
 
 files = {}
 
-files["DevSourceSwitcher/Services/RegistryService.swift"] = '''import Foundation
+files["DevSourceSwitcher/Models/AppConfig.swift"] = '''import Foundation
 
-final class RegistryService: SourceConfigServiceProtocol {
-    static let shared = RegistryService()
-    private let fileManager = FileManager.default
+struct AppConfig: Codable {
+    var npmSources: [SourceItem]
+    var yarnSources: [SourceItem]
+    var pipSources: [SourceItem]
+    var defaultNpmSourceId: UUID
+    var defaultYarnSourceId: UUID
+    var defaultPipSourceId: UUID
 
-    private init() {}
-
-    func switchRegistry(to source: SourceItem?, for type: SourceType) throws {
-        try writeRegistry(to: source, for: type)
+    enum CodingKeys: String, CodingKey {
+        case npmSources
+        case yarnSources
+        case pipSources
+        case defaultNpmSourceId
+        case defaultYarnSourceId
+        case defaultPipSourceId
     }
 
-    func currentRegistryURL(for type: SourceType) -> String? {
-        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
-            return nil
-        }
-        if type == .yarn {
-            return parseYarnRegistry(from: content)
-        }
-        return FileParser.parseValue(from: content, key: type.registryKey)
+    init(
+        npmSources: [SourceItem],
+        yarnSources: [SourceItem],
+        pipSources: [SourceItem],
+        defaultNpmSourceId: UUID,
+        defaultYarnSourceId: UUID,
+        defaultPipSourceId: UUID)
+    {
+        self.npmSources = npmSources
+        self.yarnSources = yarnSources
+        self.pipSources = pipSources
+        self.defaultNpmSourceId = defaultNpmSourceId
+        self.defaultYarnSourceId = defaultYarnSourceId
+        self.defaultPipSourceId = defaultPipSourceId
     }
 
-    // MARK: - Private
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        npmSources = try container.decode([SourceItem].self, forKey: .npmSources)
+        pipSources = try container.decode([SourceItem].self, forKey: .pipSources)
+        defaultNpmSourceId = try container.decode(UUID.self, forKey: .defaultNpmSourceId)
+        defaultPipSourceId = try container.decode(UUID.self, forKey: .defaultPipSourceId)
 
-    private func parseYarnRegistry(from content: String) -> String? {
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("#") else { continue }
-            guard trimmed.hasPrefix("registry ") else { continue }
-            let value = trimmed
-                .dropFirst("registry ".count)
-                .trimmingCharacters(in: .whitespaces)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\\"\'"))
-            return value.isEmpty ? nil : value
-        }
-        return nil
+        // 兼容旧版本 config.json（不含 yarn 字段）
+        let defaults = AppConfig.defaultYarnSources()
+        yarnSources = (try? container.decode([SourceItem].self, forKey: .yarnSources))
+            ?? defaults.sources
+        defaultYarnSourceId = (try? container.decode(UUID.self, forKey: .defaultYarnSourceId))
+            ?? defaults.defaultId
     }
 
-    private func writeRegistry(to source: SourceItem?, for type: SourceType) throws {
-        let targetURL = source?.url ?? type.officialURL
-        let fileURL = type.configPath
-        let dir = fileURL.deletingLastPathComponent()
+    static func defaultConfig() -> AppConfig {
+        // ------
+        let npmOfficial = SourceItem(
+            name: "官方源",
+            url: "https://registry.npmjs.org",
+            isBuiltIn: true)
+        let npmAliyun = SourceItem(
+            name: "阿里源",
+            url: "https://registry.npmmirror.com",
+            isBuiltIn: true)
+        // ------
+        let yarn = defaultYarnSources()
+        // ------
+        let pipOfficial = SourceItem(name: "官方源", url: "https://pypi.org/simple/", isBuiltIn: true)
+        let pipTsinghua = SourceItem(
+            name: "清华源",
+            url: "https://pypi.tuna.tsinghua.edu.cn/simple/",
+            isBuiltIn: true)
+        let pipAliyun = SourceItem(
+            name: "阿里源",
+            url: "http://mirrors.aliyun.com/pypi/simple/",
+            isBuiltIn: true)
 
-        BackupService.shared.backup(filePath: fileURL.path)
-
-        if !fileManager.fileExists(atPath: dir.path) {
-            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-
-        let existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-        var lines = existing.components(separatedBy: .newlines)
-        lines = updatedContent(lines, url: targetURL, for: type)
-
-        if type == .pip {
-            let host = httpHost(from: targetURL)
-            lines = updateTrustedHost(lines, host: host)
-        }
-
-        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
-            lines.removeLast()
-        }
-        lines.append("")
-
-        try lines.joined(separator: "\\n").write(to: fileURL, atomically: true, encoding: .utf8)
+        return AppConfig(
+            npmSources: [npmOfficial, npmAliyun],
+            yarnSources: yarn.sources,
+            pipSources: [pipOfficial, pipAliyun, pipTsinghua],
+            defaultNpmSourceId: npmAliyun.id,
+            defaultYarnSourceId: yarn.defaultId,
+            defaultPipSourceId: pipAliyun.id)
     }
 
-    private func httpHost(from url: String) -> String? {
-        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            trimmed.lowercased().hasPrefix("http://"),
-            let components = URLComponents(string: trimmed),
-            let host = components.host, !host.isEmpty else { return nil }
-        return host
+    /// 提取为独立方法，方便 init(from:) 复用
+    static func defaultYarnSources() -> (sources: [SourceItem], defaultId: UUID) {
+        let yarnOfficial = SourceItem(
+            name: "官方源",
+            url: "https://registry.yarnpkg.com",
+            isBuiltIn: true)
+        let yarnAliyun = SourceItem(
+            name: "阿里源",
+            url: "https://registry.npmmirror.com",
+            isBuiltIn: true)
+        return (sources: [yarnOfficial, yarnAliyun], defaultId: yarnAliyun.id)
     }
 
-    private func isSectionEmpty(_ lines: [String], afterIndex sectionIdx: Int) -> Bool {
-        for i in (sectionIdx + 1) ..< lines.count {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("[") { break }
-            if !trimmed.isEmpty { return false }
-        }
-        return true
+    /// 当前默认 NPM 源；若 ID 失效则回退到第一项
+    var defaultNpmSource: SourceItem? {
+        npmSources.first { $0.id == defaultNpmSourceId } ?? npmSources.first
     }
 
-    private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
-        var lines = lines
-        let key = "trusted-host"
-
-        if
-            let installIdx = lines.firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespaces).lowercased() == "[install]"
-            })
-        {
-            var foundIdx: Int?
-            for i in (installIdx + 1) ..< lines.count {
-                let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("[") { break }
-                if let eqRange = trimmed.range(of: "=") {
-                    let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
-                    if k == key {
-                        foundIdx = i
-                        break
-                    }
-                }
-            }
-
-            if let host {
-                if let idx = foundIdx {
-                    lines[idx] = "\\(key) = \\(host)"
-                } else {
-                    lines.insert("\\(key) = \\(host)", at: installIdx + 1)
-                }
-            } else {
-                if let idx = foundIdx {
-                    lines.remove(at: idx)
-                }
-                if isSectionEmpty(lines, afterIndex: installIdx) {
-                    lines.remove(at: installIdx)
-                    if
-                        installIdx > 0,
-                        lines[installIdx - 1].trimmingCharacters(in: .whitespaces).isEmpty
-                    {
-                        lines.remove(at: installIdx - 1)
-                    }
-                }
-            }
-        } else {
-            if let host {
-                lines.append("")
-                lines.append("[install]")
-                lines.append("\\(key) = \\(host)")
-            }
-        }
-
-        return lines
+    /// 当前默认 Yarn 源；若 ID 失效则回退到第一项
+    var defaultYarnSource: SourceItem? {
+        yarnSources.first { $0.id == defaultYarnSourceId } ?? yarnSources.first
     }
 
-    private func updatedContent(_ lines: [String], url: String, for type: SourceType) -> [String] {
-        var lines = lines
-        let key = type.registryKey
+    /// 当前默认 PIP 源；若 ID 失效则回退到第一项
+    var defaultPipSource: SourceItem? {
+        pipSources.first { $0.id == defaultPipSourceId } ?? pipSources.first
+    }
 
-        if type == .npm {
-            lines.removeAll { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard
-                    !trimmed.hasPrefix("#"), !trimmed.hasPrefix(";"),
-                    let eqRange = trimmed.range(of: "=") else { return false }
-                return trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key
-            }
-            lines.insert("\\(key)=\\(url)", at: 0)
-        } else if type == .yarn {
-            lines.removeAll { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.hasPrefix("#") else { return false }
-                return trimmed.hasPrefix("\\(key) ")
-            }
-            lines.insert("\\(key) \\(url)", at: 0)
-        } else {
-            if
-                let globalIdx = lines.firstIndex(where: {
-                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "[global]"
-                })
-            {
-                var foundInGlobal = false
-                for i in (globalIdx + 1) ..< lines.count {
-                    let line = lines[i].trimmingCharacters(in: .whitespaces)
-                    if line.hasPrefix("[") { break }
-                    if let eqRange = line.range(of: "=") {
-                        let k = line[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
-                        if k == key {
-                            lines[i] = "\\(key) = \\(url)"
-                            foundInGlobal = true
-                            break
-                        }
-                    }
-                }
-                if !foundInGlobal {
-                    lines.insert("\\(key) = \\(url)", at: globalIdx + 1)
-                }
-            } else {
-                lines.insert("[global]", at: 0)
-                lines.insert("\\(key) = \\(url)", at: 1)
-            }
+    /// 根据类型取对应源列表
+    func sources(for type: SourceType) -> [SourceItem] {
+        switch type {
+        case .npm: npmSources
+        case .yarn: yarnSources
+        case .pip: pipSources
         }
+    }
 
-        return lines
+    /// 根据类型取当前默认源
+    func defaultSource(for type: SourceType) -> SourceItem? {
+        switch type {
+        case .npm: defaultNpmSource
+        case .yarn: defaultYarnSource
+        case .pip: defaultPipSource
+        }
+    }
+
+    /// 根据类型取默认源 ID
+    func defaultSourceId(for type: SourceType) -> UUID {
+        switch type {
+        case .npm: defaultNpmSourceId
+        case .yarn: defaultYarnSourceId
+        case .pip: defaultPipSourceId
+        }
+    }
+
+    /// 将 url 规范化后在源列表里匹配，返回匹配到的源 ID。
+    func matchedSourceId(for type: SourceType, url: String) -> UUID? {
+        let normalized = SourceItem(name: "", url: url).normalizedURL
+        return sources(for: type).first { $0.normalizedURL == normalized }?.id
     }
 }
 '''
