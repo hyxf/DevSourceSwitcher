@@ -1,0 +1,31 @@
+{
+  "activeGroup" : "Default",
+  "groups" : {
+    "Default" : [
+      "DevSourceSwitcher/App/DevSourceSwitcherApp.swift",
+      "DevSourceSwitcher/Assets.xcassets/AccentColor.colorset/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/Contents.json",
+      "DevSourceSwitcher/Assets.xcassets/MenuBarIcon.imageset/Contents.json",
+      "DevSourceSwitcher/Models/AppConfig.swift",
+      "DevSourceSwitcher/Models/SourceItem.swift",
+      "DevSourceSwitcher/Models/SourceType.swift",
+      "DevSourceSwitcher/Services/BackupService.swift",
+      "DevSourceSwitcher/Services/ConfigStorageService.swift",
+      "DevSourceSwitcher/Services/RegistryService.swift",
+      "DevSourceSwitcher/Services/SourceConfigService.swift",
+      "DevSourceSwitcher/Services/SourceManager.swift",
+      "DevSourceSwitcher/Utils/FileParser.swift",
+      "DevSourceSwitcher/Utils/LaunchAtLogin.swift",
+      "DevSourceSwitcher/ViewModels/MenuBarViewModel.swift",
+      "DevSourceSwitcher/ViewModels/SettingsViewModel.swift",
+      "DevSourceSwitcher/Views/MenuBarView.swift",
+      "DevSourceSwitcher/Views/SettingsView.swift",
+      "DevSourceSwitcher/Views/SourceDetailView.swift",
+      "DevSourceSwitcher/Views/SourceEditorView.swift",
+      "DevSourceSwitcher/Views/SourceListView.swift",
+      "DevSourceSwitcher/Views/SourceSectionView.swift",
+      "DevSourceSwitcher/project.yml"
+    ]
+  }
+}
