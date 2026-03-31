@@ -19,7 +19,7 @@ struct SourceSectionView: View {
                 defaultSourcePicker
                 Divider().opacity(0.5)
                 SourceListView(sourceType: type, viewModel: viewModel)
-                    .frame(height: 280)
+                    .frame(height: 274)
             }
             .cornerRadius(8)
             .overlay(
