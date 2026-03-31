@@ -32,10 +32,6 @@ final class MenuBarViewModel: ObservableObject {
         manager.selectSource(source, for: type)
     }
 
-    func refreshState() {
-        manager.refreshActiveSources()
-    }
-
     private func updateStates() {
         npmState = makeState(for: .npm)
         yarnState = makeState(for: .yarn)

@@ -2,93 +2,68 @@ import os
 
 files = {}
 
-files["DevSourceSwitcher/Views/SourceSectionView.swift"] = '''import SwiftUI
+files["DevSourceSwitcher/ViewModels/MenuBarViewModel.swift"] = '''import Combine
+import Foundation
 
-struct SourceSectionView: View {
-    let type: SourceType
-    @ObservedObject var viewModel: SettingsViewModel
+struct SourceToggleState: Equatable {
+    var isEnabled: Bool = false
+    var activeName: String = "官方源"
+    var allSources: [SourceItem] = []
+    var activeSourceId: UUID?
+}
 
-    @Environment(\\.openWindow) private var openWindow
+@MainActor
+final class MenuBarViewModel: ObservableObject {
+    @Published private(set) var npmState: SourceToggleState = .init()
+    @Published private(set) var yarnState: SourceToggleState = .init()
+    @Published private(set) var pipState: SourceToggleState = .init()
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SettingsHeader(
-                title: "\\(type.displayName) 环境配置",
-                icon: type == .npm ? "network" : type == .yarn ? "screwdriver" : "shippingbox")
-                .frame(height: 20)
+    private let manager = SourceManager.shared
+    private var cancellables = Set<AnyCancellable>()
 
-            configFileButton(for: type)
-
-            VStack(spacing: 0) {
-                defaultSourcePicker
-                Divider().opacity(0.5)
-                SourceListView(sourceType: type, viewModel: viewModel)
-                    .frame(height: 280)
+    init() {
+        manager.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateStates()
             }
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.primary.opacity(0.05), lineWidth: 1))
-        }
+            .store(in: &cancellables)
+
+        updateStates()
     }
 
-    // MARK: - Subviews
-
-    @ViewBuilder
-    private func configFileButton(for configType: SourceType) -> some View {
-        HStack(spacing: 4) {
-            Text("配置文件：")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            Button(configType.configPath.path) {
-                let url = configType.configPath
-                let path = url.path
-                let text: String = if FileManager.default.fileExists(atPath: path) {
-                    if
-                        let data = try? Data(contentsOf: url),
-                        let str = String(data: data, encoding: .utf8)
-                    {
-                        str.isEmpty ? "（文件为空）" : str
-                    } else if
-                        let data = try? Data(contentsOf: url),
-                        let str = String(data: data, encoding: .isoLatin1)
-                    {
-                        str.isEmpty ? "（文件为空）" : str
-                    } else {
-                        "（文件读取失败）"
-                    }
-                } else {
-                    "（文件不存在）"
-                }
-                openWindow(value: ConfigContent(path: path, content: text))
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(Color.accentColor)
-            Spacer()
-        }
+    func selectSource(_ source: SourceItem, for type: SourceType) {
+        manager.selectSource(source, for: type)
     }
 
-    private var defaultSourcePicker: some View {
-        HStack {
-            Text("当前生效源").font(.system(size: 13))
-            Spacer()
-            Picker("", selection: Binding(
-                get: { viewModel.activeSourceId(for: type) ?? UUID() },
-                set: { viewModel.updateDefault(type: type, id: $0) }))
-            {
-                if viewModel.activeSourceId(for: type) == nil {
-                    Text("自定义或未知").tag(UUID())
-                }
-                ForEach(viewModel.sources(for: type)) { source in
-                    Text(source.name).tag(source.id)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 180)
+    private func updateStates() {
+        npmState = makeState(for: .npm)
+        yarnState = makeState(for: .yarn)
+        pipState = makeState(for: .pip)
+    }
+
+    private func makeState(for type: SourceType) -> SourceToggleState {
+        let config = manager.config
+        let sources = config.sources(for: type)
+        let activeId: UUID?
+        switch type {
+        case .npm: activeId = manager.activeNpmSourceId
+        case .yarn: activeId = manager.activeYarnSourceId
+        case .pip: activeId = manager.activePipSourceId
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Color.primary.opacity(0.03))
+
+        let activeName: String = {
+            if let id = activeId, let name = sources.first(where: { $0.id == id })?.name {
+                return name
+            }
+            return "自定义源"
+        }()
+
+        return SourceToggleState(
+            isEnabled: activeId != nil,
+            activeName: activeName,
+            allSources: sources,
+            activeSourceId: activeId)
     }
 }
 '''

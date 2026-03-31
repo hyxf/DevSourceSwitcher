@@ -13,7 +13,6 @@ struct MenuBarView: View {
             Divider()
 
             Button("设置...") { openSettings() }
-            Button("刷新状态") { viewModel.refreshState() }
 
             Divider()
 
