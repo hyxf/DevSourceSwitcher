@@ -86,7 +86,7 @@ struct AppConfig: Codable {
             name: "本地 SOCKS5",
             url: "socks5h://127.0.0.1:1086",
             isBuiltIn: true)
-         let gitHttp = SourceItem(
+        let gitHttp = SourceItem(
             name: "本地 HTTP",
             url: "http://127.0.0.1:1087",
             isBuiltIn: true)
@@ -95,11 +95,11 @@ struct AppConfig: Codable {
             npmSources: [npmOfficial, npmAliyun],
             yarnSources: yarn.sources,
             pipSources: [pipOfficial, pipAliyun],
-            gitSources: [gitDefault],
+            gitSources: [gitSocks5, gitHttp],
             defaultNpmSourceId: npmAliyun.id,
             defaultYarnSourceId: yarn.defaultId,
             defaultPipSourceId: pipAliyun.id,
-            defaultGitSourceId: gitDefault.id,
+            defaultGitSourceId: gitSocks5.id,
             gitOnlyGithub: true)
     }
 
