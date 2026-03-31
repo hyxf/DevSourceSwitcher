@@ -6,7 +6,6 @@ struct MenuBarView: View {
 
     var body: some View {
         Group {
-            // 审计修复：如果发生错误，在菜单顶部显示明显的错误提示
             if let error = viewModel.lastError {
                 Text("⚠️ 切换失败").font(.headline).foregroundStyle(.red)
                 Text(error).font(.caption).foregroundStyle(.secondary)
@@ -47,7 +46,7 @@ struct MenuBarView: View {
             }
             if type == .git, state.isEnabled {
                 Divider()
-                Button("关闭代理") { viewModel.selectSource(nil, for: .git) }
+                Button("未启用") { viewModel.selectSource(nil, for: .git) }
             }
         }
     }

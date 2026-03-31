@@ -42,14 +42,18 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func getValueFromSection(_ lines: [String], section: String, key: String) -> String? {
         var inSection = false
         for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.lowercased() == section.lowercased() { inSection = true; continue }
             if inSection, trimmed.hasPrefix("[") { break }
             if inSection, let eqRange = trimmed.range(of: "=") {
-                // 审计修正：Key 匹配不区分大小写
-                let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                let k = trimmed[..<eqRange.lowerBound]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 if k.lowercased() == key.lowercased() {
-                    return trimmed[eqRange.upperBound...].trimmingCharacters(in: .whitespaces)
+                    let rawValue = trimmed[eqRange.upperBound...]
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let cleanValue = rawValue
+                        .components(separatedBy: CharacterSet(charactersIn: "#;")).first ?? ""
+                    return cleanValue.trimmingCharacters(in: .whitespacesAndNewlines)
                         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
                 }
             }
@@ -59,11 +63,12 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func parseYarnRegistry(from content: String) -> String? {
         for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard
                 !trimmed.hasPrefix("#"),
                 trimmed.lowercased().hasPrefix("registry ") else { continue }
-            return trimmed.dropFirst("registry ".count).trimmingCharacters(in: .whitespaces)
+            return trimmed.dropFirst("registry ".count)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
         }
         return nil
@@ -87,10 +92,13 @@ final class RegistryService: SourceConfigServiceProtocol {
                 onlyGithub: ConfigStorageService.shared.load().gitOnlyGithub)
         } else {
             lines = updatedContent(lines, url: targetURL, for: type)
-            if type == .pip { lines = updateTrustedHost(lines, host: httpHost(from: targetURL)) }
+            if type == .pip {
+                let host = httpHost(from: targetURL)
+                lines = updateTrustedHost(lines, host: host)
+            }
         }
         while
-            lines.last?.trimmingCharacters(in: .whitespaces)
+            lines.last?.trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty == true
         {
             lines.removeLast()
@@ -123,12 +131,12 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func removeKeyFromSection(_ lines: [String], section: String, key: String) -> [String] {
         var lines = lines, i = 0, inSection = false
         while i < lines.count {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            let trimmed = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.lowercased() == section.lowercased() { inSection = true; i += 1; continue }
             if inSection, trimmed.hasPrefix("[") { inSection = false }
-            if inSection, let eqRange = trimmed.range(of: "=") {
+            if inSection, let eq = trimmed.range(of: "=") {
                 if
-                    trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                    trimmed[..<eq.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
                         .lowercased() == key.lowercased()
                 {
                     lines.remove(at: i); continue
@@ -139,14 +147,15 @@ final class RegistryService: SourceConfigServiceProtocol {
         if
             let idx = lines
                 .firstIndex(where: {
-                    $0.trimmingCharacters(in: .whitespaces).lowercased() == section.lowercased()
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == section
+                        .lowercased()
                 })
         {
             if isSectionEmpty(lines, afterIndex: idx) {
                 lines.remove(at: idx)
                 if
                     idx > 0,
-                    lines[idx - 1].trimmingCharacters(in: .whitespaces)
+                    lines[idx - 1].trimmingCharacters(in: .whitespacesAndNewlines)
                         .isEmpty { lines.remove(at: idx - 1) }
             }
         }
@@ -155,9 +164,9 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func isSectionEmpty(_ lines: [String], afterIndex sectionIdx: Int) -> Bool {
         for i in (sectionIdx + 1) ..< lines.count {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            let trimmed = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("[") { break }
-            if !trimmed.isEmpty { return false }
+            if !trimmed.isEmpty, !trimmed.hasPrefix("#"), !trimmed.hasPrefix(";") { return false }
         }
         return true
     }
@@ -172,7 +181,8 @@ final class RegistryService: SourceConfigServiceProtocol {
         if
             let idx = lines
                 .firstIndex(where: {
-                    $0.trimmingCharacters(in: .whitespaces).lowercased() == section.lowercased()
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == section
+                        .lowercased()
                 })
         {
             lines.insert("\t\(key) = \(value)", at: idx + 1)
@@ -186,17 +196,17 @@ final class RegistryService: SourceConfigServiceProtocol {
         var lines = lines, key = type.registryKey
         if type == .npm {
             lines.removeAll { line in
-                let t = line.trimmingCharacters(in: .whitespaces)
+                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard
                     !t.hasPrefix("#"), !t.hasPrefix(";"),
                     let eq = t.range(of: "=") else { return false }
-                return t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces).lowercased() == key
-                    .lowercased()
+                return t[..<eq.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased() == key.lowercased()
             }
             lines.insert("\(key)=\(url)", at: 0)
         } else if type == .yarn {
             lines.removeAll { line in
-                let t = line.trimmingCharacters(in: .whitespaces)
+                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 return !t.hasPrefix("#") && t.lowercased().hasPrefix("\(key.lowercased()) ")
             }
             lines.insert("\(key) \"\(url)\"", at: 0)
@@ -204,16 +214,16 @@ final class RegistryService: SourceConfigServiceProtocol {
             if
                 let idx = lines
                     .firstIndex(where: {
-                        $0.trimmingCharacters(in: .whitespaces).lowercased() == "[global]"
+                        $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "[global]"
                     })
             {
                 var found = false
                 for i in (idx + 1) ..< lines.count {
-                    let line = lines[i].trimmingCharacters(in: .whitespaces)
+                    let line = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
                     if line.hasPrefix("[") { break }
                     if
                         let eq = line.range(of: "="),
-                        line[..<eq.lowerBound].trimmingCharacters(in: .whitespaces)
+                        line[..<eq.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
                             .lowercased() == key.lowercased()
                     {
                         lines[i] = "\(key) = \(url)"; found = true; break
@@ -232,16 +242,16 @@ final class RegistryService: SourceConfigServiceProtocol {
         if
             let idx = lines
                 .firstIndex(where: {
-                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "[install]"
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "[install]"
                 })
         {
             var foundIdx: Int?
             for i in (idx + 1) ..< lines.count {
-                let t = lines[i].trimmingCharacters(in: .whitespaces)
+                let t = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
                 if t.hasPrefix("[") { break }
                 if
                     let eq = t.range(of: "="),
-                    t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces)
+                    t[..<eq.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
                         .lowercased() == key { foundIdx = i; break }
             }
             if let host {
@@ -254,7 +264,7 @@ final class RegistryService: SourceConfigServiceProtocol {
                     lines.remove(at: idx)
                     if
                         idx > 0,
-                        lines[idx - 1].trimmingCharacters(in: .whitespaces)
+                        lines[idx - 1].trimmingCharacters(in: .whitespacesAndNewlines)
                             .isEmpty { lines.remove(at: idx - 1) }
                 }
             }
@@ -266,6 +276,8 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func httpHost(from url: String) -> String? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 核心修复点：仅在 URL 为 http:// 时提取 host，https 必须返回 nil 触发清理逻辑
+        guard trimmed.lowercased().hasPrefix("http://") else { return nil }
         guard let comp = URLComponents(string: trimmed), let host = comp.host else { return nil }
         return host
     }

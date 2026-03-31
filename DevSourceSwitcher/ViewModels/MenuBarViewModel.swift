@@ -15,7 +15,6 @@ final class MenuBarViewModel: ObservableObject {
     @Published private(set) var pipState: SourceToggleState = .init()
     @Published private(set) var gitState: SourceToggleState = .init()
 
-    /// 审计修复：暴露 lastError 给 MenuBarView
     var lastError: String? {
         manager.lastError
     }
@@ -60,11 +59,16 @@ final class MenuBarViewModel: ObservableObject {
         case .git: manager.activeGitSourceId
         }
 
+        // 修正点：通过读取 Registry 内容区分“未启用”和“自定义代理”
         let activeName: String = {
             if
                 let id = activeId,
                 let name = sources.first(where: { $0.id == id })?.name { return name }
-            return type == .git ? "未启用" : "自定义源"
+            if type == .git {
+                let currentVal = RegistryService.shared.currentRegistryURL(for: .git) ?? ""
+                return currentVal.isEmpty ? "未启用" : "自定义代理"
+            }
+            return "自定义源"
         }()
 
         return SourceToggleState(
