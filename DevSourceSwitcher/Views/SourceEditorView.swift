@@ -22,7 +22,7 @@ struct SourceEditorView: View {
                     HStack(spacing: 8) {
                         Picker("", selection: $protocolType) {
                             ForEach(
-                                ["http://", "https://", "socks5://", "socks5h://"],
+                                ["socks5h://", "socks5://", "http://"],
                                 id: \.self)
                             {
                                 Text($0)
@@ -56,8 +56,8 @@ struct SourceEditorView: View {
                     let protocols = [
                         "socks5h://",
                         "socks5://",
-                        "https://",
                         "http://",
+                        "https://",
                         "socks4://",
                         "socks://"
                     ]
@@ -66,7 +66,13 @@ struct SourceEditorView: View {
                             of: $0,
                             options: [.anchored, .caseInsensitive]) != nil })
                     {
-                        protocolType = foundProto.lowercased()
+                        // 逻辑修正：如果原本是旧的 https:// 或 socks4://，自动映射到当前支持的协议或保留其头部
+                        let p = foundProto.lowercased()
+                        if ["socks5h://", "socks5://", "http://"].contains(p) {
+                            protocolType = p
+                        } else {
+                            protocolType = "socks5h://" // 默认 fallback
+                        }
                         host = String(item.url.dropFirst(foundProto.count))
                     } else { host = item.url }
                 } else { host = item.url }
