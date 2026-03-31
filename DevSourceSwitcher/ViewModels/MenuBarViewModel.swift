@@ -38,6 +38,10 @@ final class MenuBarViewModel: ObservableObject {
         pipState = makeState(for: .pip)
     }
 
+    func refreshState() {
+        manager.refreshActiveSources()
+    }
+
     private func makeState(for type: SourceType) -> SourceToggleState {
         let config = manager.config
         let sources = config.sources(for: type)
