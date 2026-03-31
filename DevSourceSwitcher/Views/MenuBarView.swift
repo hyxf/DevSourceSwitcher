@@ -6,6 +6,13 @@ struct MenuBarView: View {
 
     var body: some View {
         Group {
+            // 审计修复：如果发生错误，在菜单顶部显示明显的错误提示
+            if let error = viewModel.lastError {
+                Text("⚠️ 切换失败").font(.headline).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(.secondary)
+                Divider()
+            }
+
             sourceSubMenu(for: .npm, state: viewModel.npmState, icon: "shippingbox.fill")
             sourceSubMenu(for: .yarn, state: viewModel.yarnState, icon: "screwdriver")
             sourceSubMenu(for: .pip, state: viewModel.pipState, icon: "pyramid.fill")
@@ -25,12 +32,11 @@ struct MenuBarView: View {
         state: SourceToggleState,
         icon: String) -> some View
     {
-        // 修正：通过补齐空格，确保不同长度的标题在 \t 后能对齐
         let title = switch type {
         case .npm: "NPM Registry"
         case .yarn: "Yarn Registry"
-        case .pip: "PIP Index      " // 补齐到 Yarn Registry 的长度
-        case .git: "Git Proxy      " // 补齐到 Yarn Registry 的长度
+        case .pip: "PIP Index      "
+        case .git: "Git Proxy      "
         }
 
         Menu("\(title)\t - (\(state.activeName))") {

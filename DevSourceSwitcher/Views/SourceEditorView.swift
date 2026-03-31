@@ -1,43 +1,21 @@
 import SwiftUI
 
 struct SourceEditorView: View {
-    enum Mode {
-        case add(SourceType)
-        case edit(SourceItem, SourceType)
-    }
-
-    let mode: Mode
-    let onSave: (String, String) -> Bool
-    let validationError: String?
-    let onDismiss: () -> Void
+    enum Mode { case add(SourceType); case edit(SourceItem, SourceType) }
+    let mode: Mode; let onSave: (String, String)
+        -> Bool; let validationError: String?; let onDismiss: () -> Void
 
     @State private var name: String = ""
     @State private var protocolType: String = "socks5h://"
     @State private var host: String = ""
 
-    private var title: String {
-        switch mode {
-        case let .add(type): "新增 \(type.displayName) 源"
-        case let .edit(item, type): "编辑 \(type.displayName) 源：\(item.name)"
-        }
-    }
-
     private var sourceType: SourceType {
-        switch mode {
-        case let .add(t): t
-        case let .edit(_, t): t
-        }
-    }
-
-    private var isSaveDisabled: Bool {
-        name.trimmingCharacters(in: .whitespaces).isEmpty ||
-            host.trimmingCharacters(in: .whitespaces).isEmpty
+        switch mode { case let .add(t): return t; case let .edit(_, t): return t }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(title).font(.headline)
-
+            Text(sourceType == .git ? "配置代理地址" : "配置源地址").font(.headline)
             Form {
                 TextField("名称", text: $name)
                 if sourceType == .git {
@@ -49,58 +27,62 @@ struct SourceEditorView: View {
                             {
                                 Text($0)
                             }
-                        }
-                        .labelsHidden()
-                        .frame(width: 100)
-
+                        }.labelsHidden().frame(width: 100)
                         TextField("127.0.0.1:7891", text: $host)
                     }
                 } else {
-                    TextField("URL（https://...）", text: $host)
+                    TextField("URL", text: $host)
                 }
-            }
-            .formStyle(.grouped)
+            }.formStyle(.grouped)
 
-            Group {
-                if let error = validationError {
-                    Text(error).font(.footnote).foregroundStyle(.red)
-                } else {
-                    Text(" ").font(.footnote)
-                }
-            }
+            if let error = validationError { Text(error).font(.caption).foregroundStyle(.red) }
 
             HStack {
                 Spacer()
                 Button("取消") { onDismiss() }
-                    .keyboardShortcut(.cancelAction)
-
                 Button("保存") {
-                    let finalURL = sourceType == .git ?
-                        "\(protocolType)\(host.trimmingCharacters(in: .whitespaces))" : host
-                        .trimmingCharacters(in: .whitespaces)
+                    let cleanedHost = sanitizeHost(host)
+                    let finalURL = sourceType == .git ? "\(protocolType)\(cleanedHost)" :
+                        cleanedHost
                     if onSave(name, finalURL) { onDismiss() }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(isSaveDisabled)
+                }.disabled(name.isEmpty || host.isEmpty).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 380)
+        .padding(20).frame(width: 380)
         .onAppear {
             if case let .edit(item, type) = mode {
                 name = item.name
                 if type == .git {
-                    let protocols = ["socks5h://", "socks5://", "https://", "http://"]
-                    if let proto = protocols.first(where: { item.url.hasPrefix($0) }) {
-                        protocolType = proto
-                        host = String(item.url.dropFirst(proto.count))
-                    } else {
-                        host = item.url
-                    }
-                } else {
-                    host = item.url
-                }
+                    let protocols = [
+                        "socks5h://",
+                        "socks5://",
+                        "https://",
+                        "http://",
+                        "socks4://",
+                        "socks://"
+                    ]
+                    // 审计修正：使用 range(of:options:) 实现大小写不敏感匹配
+                    if
+                        let foundProto = protocols.first(where: { item.url.range(
+                            of: $0,
+                            options: [.anchored, .caseInsensitive]) != nil })
+                    {
+                        protocolType = foundProto.lowercased()
+                        host = String(item.url.dropFirst(foundProto.count))
+                    } else { host = item.url }
+                } else { host = item.url }
             }
         }
+    }
+
+    private func sanitizeHost(_ input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespaces)
+        let protocols = ["socks5h://", "socks5://", "socks4://", "socks://", "https://", "http://"]
+        for proto in protocols {
+            if trimmed.range(of: proto, options: [.anchored, .caseInsensitive]) != nil {
+                return String(trimmed.dropFirst(proto.count))
+            }
+        }
+        return trimmed
     }
 }

@@ -14,14 +14,19 @@ final class RegistryService: SourceConfigServiceProtocol {
         guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else { return nil }
         if type == .yarn { return parseYarnRegistry(from: content) }
         if type == .git { return parseGitProxy(from: content) }
-        return FileParser.parseValue(from: content, key: type.registryKey)
-    }
 
-    // MARK: - Git Parsing
+        let url = FileParser.parseValue(from: content, key: type.registryKey)
+        if type == .pip, let foundURL = url, foundURL.lowercased().hasPrefix("http://") {
+            let host = httpHost(from: foundURL)
+            let lines = content.components(separatedBy: .newlines)
+            let trustedHost = getValueFromSection(lines, section: "[install]", key: "trusted-host")
+            if host?.lowercased() != trustedHost?.lowercased() { return nil }
+        }
+        return url
+    }
 
     private func parseGitProxy(from content: String) -> String? {
         let lines = content.components(separatedBy: .newlines)
-        // 遵循 Git 优先级：优先特定域名配置，再回退到全局
         let sections = [
             "[http \"https://github.com\"]",
             "[https \"https://github.com\"]",
@@ -41,8 +46,9 @@ final class RegistryService: SourceConfigServiceProtocol {
             if trimmed.lowercased() == section.lowercased() { inSection = true; continue }
             if inSection, trimmed.hasPrefix("[") { break }
             if inSection, let eqRange = trimmed.range(of: "=") {
+                // 审计修正：Key 匹配不区分大小写
                 let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
-                if k == key {
+                if k.lowercased() == key.lowercased() {
                     return trimmed[eqRange.upperBound...].trimmingCharacters(in: .whitespaces)
                         .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
                 }
@@ -54,7 +60,9 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func parseYarnRegistry(from content: String) -> String? {
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("#"), trimmed.hasPrefix("registry ") else { continue }
+            guard
+                !trimmed.hasPrefix("#"),
+                trimmed.lowercased().hasPrefix("registry ") else { continue }
             return trimmed.dropFirst("registry ".count).trimmingCharacters(in: .whitespaces)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
         }
@@ -64,29 +72,23 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func writeRegistry(to source: SourceItem?, for type: SourceType) throws {
         let targetURL = source?.url ?? type.officialURL
         let fileURL = type.configPath
-        let dir = fileURL.deletingLastPathComponent()
-
         BackupService.shared.backup(filePath: fileURL.path)
-
-        if !fileManager.fileExists(atPath: dir.path) {
-            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        if !fileManager.fileExists(atPath: fileURL.deletingLastPathComponent().path) {
+            try fileManager.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
         }
-
         let existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
         var lines = existing.components(separatedBy: .newlines)
-
         if type == .git {
-            let onlyGithub = ConfigStorageService.shared.load().gitOnlyGithub
-            lines = updateGitProxy(lines, proxy: targetURL, onlyGithub: onlyGithub)
+            lines = updateGitProxy(
+                lines,
+                proxy: targetURL,
+                onlyGithub: ConfigStorageService.shared.load().gitOnlyGithub)
         } else {
             lines = updatedContent(lines, url: targetURL, for: type)
-            if type == .pip {
-                let host = httpHost(from: targetURL)
-                lines = updateTrustedHost(lines, host: host)
-            }
+            if type == .pip { lines = updateTrustedHost(lines, host: httpHost(from: targetURL)) }
         }
-
-        // 完全还原原始逻辑：清理尾部空行
         while
             lines.last?.trimmingCharacters(in: .whitespaces)
                 .isEmpty == true
@@ -97,21 +99,15 @@ final class RegistryService: SourceConfigServiceProtocol {
         try lines.joined(separator: "\n").write(to: fileURL, atomically: true, encoding: .utf8)
     }
 
-    // MARK: - Git Writing (完美复刻 Section 清理算法)
-
     private func updateGitProxy(_ lines: [String], proxy: String, onlyGithub: Bool) -> [String] {
         var lines = lines
         let global = ["[http]", "[https]"], github = [
             "[http \"https://github.com\"]",
             "[https \"https://github.com\"]"
         ]
-
-        // 彻底清理历史相关项
         for s in global + github {
             lines = removeKeyFromSection(lines, section: s, key: "proxy")
         }
-
-        // 写入新配置
         if !proxy.isEmpty {
             for s in onlyGithub ? github : global {
                 lines = addOrUpdateKeyInSection(
@@ -131,13 +127,15 @@ final class RegistryService: SourceConfigServiceProtocol {
             if trimmed.lowercased() == section.lowercased() { inSection = true; i += 1; continue }
             if inSection, trimmed.hasPrefix("[") { inSection = false }
             if inSection, let eqRange = trimmed.range(of: "=") {
-                if trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key {
+                if
+                    trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                        .lowercased() == key.lowercased()
+                {
                     lines.remove(at: i); continue
                 }
             }
             i += 1
         }
-        // 完全复刻原版 PIP 逻辑：若节变空，则移除标题及上方空行
         if
             let idx = lines
                 .firstIndex(where: {
@@ -192,17 +190,17 @@ final class RegistryService: SourceConfigServiceProtocol {
                 guard
                     !t.hasPrefix("#"), !t.hasPrefix(";"),
                     let eq = t.range(of: "=") else { return false }
-                return t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces) == key
+                return t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces).lowercased() == key
+                    .lowercased()
             }
             lines.insert("\(key)=\(url)", at: 0)
         } else if type == .yarn {
             lines.removeAll { line in
                 let t = line.trimmingCharacters(in: .whitespaces)
-                return !t.hasPrefix("#") && t.hasPrefix("\(key) ")
+                return !t.hasPrefix("#") && t.lowercased().hasPrefix("\(key.lowercased()) ")
             }
             lines.insert("\(key) \"\(url)\"", at: 0)
         } else {
-            // PIP [global] 逻辑
             if
                 let idx = lines
                     .firstIndex(where: {
@@ -215,7 +213,8 @@ final class RegistryService: SourceConfigServiceProtocol {
                     if line.hasPrefix("[") { break }
                     if
                         let eq = line.range(of: "="),
-                        line[..<eq.lowerBound].trimmingCharacters(in: .whitespaces) == key
+                        line[..<eq.lowerBound].trimmingCharacters(in: .whitespaces)
+                            .lowercased() == key.lowercased()
                     {
                         lines[i] = "\(key) = \(url)"; found = true; break
                     }
@@ -230,7 +229,6 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
         var lines = lines, key = "trusted-host"
-        // 完全复刻原始 PIP [install] 维护算法
         if
             let idx = lines
                 .firstIndex(where: {
@@ -243,8 +241,8 @@ final class RegistryService: SourceConfigServiceProtocol {
                 if t.hasPrefix("[") { break }
                 if
                     let eq = t.range(of: "="),
-                    t[..<eq.lowerBound]
-                        .trimmingCharacters(in: .whitespaces) == key { foundIdx = i; break }
+                    t[..<eq.lowerBound].trimmingCharacters(in: .whitespaces)
+                        .lowercased() == key { foundIdx = i; break }
             }
             if let host {
                 if let f = foundIdx { lines[f] = "\(key) = \(host)" } else { lines.insert(
@@ -268,9 +266,7 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     private func httpHost(from url: String) -> String? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            trimmed.lowercased().hasPrefix("http://"), let comp = URLComponents(string: trimmed),
-            let host = comp.host else { return nil }
+        guard let comp = URLComponents(string: trimmed), let host = comp.host else { return nil }
         return host
     }
 }

@@ -13,36 +13,32 @@ struct SourceItem: Codable, Identifiable, Equatable, Hashable {
         self.isBuiltIn = isBuiltIn
     }
 
-    /// 验证 URL 是否为合法的 http/https 或代理地址
     var isValidURL: Bool {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
-            let components = URLComponents(string: url
-                .trimmingCharacters(in: .whitespacesAndNewlines)),
+            let components = URLComponents(string: trimmed),
             let scheme = components.scheme?.lowercased(),
             ["https", "http", "socks5", "socks5h", "socks4", "socks"].contains(scheme),
             components.host?.isEmpty == false else { return false }
         return true
     }
 
-    /// 100% 对齐原始逻辑：针对 Git 代理做防碰撞优化
     var normalizedURL: String {
         let lowercasedURL = url.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // 针对 Git 代理常见的 socks 协议，保留协议头以防在匹配 ID 时与同端口的 http 代理产生碰撞
-        if lowercasedURL.hasPrefix("socks") {
-            return lowercasedURL
-                .replacingOccurrences(of: "\"", with: "")
-                .replacingOccurrences(of: "'", with: "")
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        }
-
-        // 原始逻辑：统一小写、去除协议前缀、去除引号、去除末尾斜杠
-        var result = lowercasedURL
+        let cleaned = lowercasedURL
             .replacingOccurrences(of: "\"", with: "")
             .replacingOccurrences(of: "'", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+
+        // Git 代理特殊处理：保留所有协议头（包括 http）以确保匹配的唯一性
+        // NPM/PIP 保持传统：剔除 http(s) 以实现最大兼容
+        if cleaned.contains("://") {
+            if cleaned.hasPrefix("socks") || cleaned.contains("proxy") { return cleaned }
+        }
+
+        return cleaned
             .replacingOccurrences(of: "https://", with: "")
             .replacingOccurrences(of: "http://", with: "")
-
-        return result.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
     }
 }

@@ -15,6 +15,11 @@ final class MenuBarViewModel: ObservableObject {
     @Published private(set) var pipState: SourceToggleState = .init()
     @Published private(set) var gitState: SourceToggleState = .init()
 
+    /// 审计修复：暴露 lastError 给 MenuBarView
+    var lastError: String? {
+        manager.lastError
+    }
+
     private let manager = SourceManager.shared
     private var cancellables = Set<AnyCancellable>()
 
@@ -55,7 +60,6 @@ final class MenuBarViewModel: ObservableObject {
         case .git: manager.activeGitSourceId
         }
 
-        // 对齐原始逻辑：匹配不到 ID 时返回“自定义源”或“未启用”
         let activeName: String = {
             if
                 let id = activeId,
