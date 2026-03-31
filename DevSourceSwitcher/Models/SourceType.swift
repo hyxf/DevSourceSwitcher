@@ -3,6 +3,7 @@ import Foundation
 enum SourceType: String, Codable, CaseIterable, Identifiable {
     case npm = "NPM"
     case pip = "PIP"
+    case yarn = "Yarn"
 
     var id: String {
         rawValue
@@ -16,6 +17,7 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .npm: ".npmrc"
         case .pip: "pip.conf"
+        case .yarn: ".yarnrc"
         }
     }
 
@@ -26,6 +28,8 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
             return home
         case .pip:
             return home.appendingPathComponent(".pip", isDirectory: true)
+        case .yarn:
+            return home
         }
     }
 
@@ -37,6 +41,7 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .npm: "registry"
         case .pip: "index-url"
+        case .yarn: "registry"
         }
     }
 
@@ -44,6 +49,7 @@ enum SourceType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .npm: "https://registry.npmjs.org"
         case .pip: "https://pypi.org/simple"
+        case .yarn: "https://registry.yarnpkg.com"
         }
     }
 }

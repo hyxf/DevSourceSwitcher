@@ -12,36 +12,13 @@ struct SourceSectionView: View {
                 title: "\(type.displayName) 环境配置",
                 icon: type == .npm ? "network" : "shippingbox")
 
-            HStack(spacing: 4) {
-                Text("配置文件：")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                Button(type.configPath.path) {
-                    let url = type.configPath
-                    let path = url.path
-                    let text: String = if FileManager.default.fileExists(atPath: path) {
-                        if
-                            let data = try? Data(contentsOf: url),
-                            let str = String(data: data, encoding: .utf8)
-                        {
-                            str.isEmpty ? "（文件为空）" : str
-                        } else if
-                            let data = try? Data(contentsOf: url),
-                            let str = String(data: data, encoding: .isoLatin1)
-                        {
-                            str.isEmpty ? "（文件为空）" : str
-                        } else {
-                            "（文件读取失败）"
-                        }
-                    } else {
-                        "（文件不存在）"
-                    }
-                    openWindow(value: ConfigContent(path: path, content: text))
+            if type == .npm {
+                HStack(spacing: 16) {
+                    configFileButton(for: .npm)
+                    configFileButton(for: .yarn)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Color.accentColor)
-                Spacer()
+            } else {
+                configFileButton(for: type)
             }
 
             VStack(spacing: 0) {
@@ -54,6 +31,41 @@ struct SourceSectionView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.primary.opacity(0.05), lineWidth: 1))
+        }
+    }
+
+    // MARK: - Subviews
+
+    private func configFileButton(for configType: SourceType) -> some View {
+        HStack(spacing: 4) {
+            Text("配置文件：")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Button(configType.configPath.path) {
+                let url = configType.configPath
+                let path = url.path
+                let text: String = if FileManager.default.fileExists(atPath: path) {
+                    if
+                        let data = try? Data(contentsOf: url),
+                        let str = String(data: data, encoding: .utf8)
+                    {
+                        str.isEmpty ? "（文件为空）" : str
+                    } else if
+                        let data = try? Data(contentsOf: url),
+                        let str = String(data: data, encoding: .isoLatin1)
+                    {
+                        str.isEmpty ? "（文件为空）" : str
+                    } else {
+                        "（文件读取失败）"
+                    }
+                } else {
+                    "（文件不存在）"
+                }
+                openWindow(value: ConfigContent(path: path, content: text))
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(Color.accentColor)
         }
     }
 

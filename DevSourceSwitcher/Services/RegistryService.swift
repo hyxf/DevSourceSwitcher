@@ -7,6 +7,23 @@ final class RegistryService: SourceConfigServiceProtocol {
     private init() {}
 
     func switchRegistry(to source: SourceItem?, for type: SourceType) throws {
+        try writeRegistry(to: source, for: type)
+
+        if type == .npm {
+            try? writeRegistry(to: source, for: .yarn)
+        }
+    }
+
+    func currentRegistryURL(for type: SourceType) -> String? {
+        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
+            return nil
+        }
+        return FileParser.parseValue(from: content, key: type.registryKey)
+    }
+
+    // MARK: - Private
+
+    private func writeRegistry(to source: SourceItem?, for type: SourceType) throws {
         let targetURL = source?.url ?? type.officialURL
         let fileURL = type.configPath
         let dir = fileURL.deletingLastPathComponent()
@@ -26,7 +43,6 @@ final class RegistryService: SourceConfigServiceProtocol {
             lines = updateTrustedHost(lines, host: host)
         }
 
-        // 移除末尾连续空行，保留最多一个换行结尾
         while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
             lines.removeLast()
         }
@@ -34,15 +50,6 @@ final class RegistryService: SourceConfigServiceProtocol {
 
         try lines.joined(separator: "\n").write(to: fileURL, atomically: true, encoding: .utf8)
     }
-
-    func currentRegistryURL(for type: SourceType) -> String? {
-        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
-            return nil
-        }
-        return FileParser.parseValue(from: content, key: type.registryKey)
-    }
-
-    // MARK: - Private
 
     /// 若 url 为 http:// 开头则返回 host，否则返回 nil
     private func httpHost(from url: String) -> String? {
@@ -97,10 +104,8 @@ final class RegistryService: SourceConfigServiceProtocol {
                 if let idx = foundIdx {
                     lines.remove(at: idx)
                 }
-                // 移除后重新检查 [install] 节是否为空，为空则移除节头
                 if isSectionEmpty(lines, afterIndex: installIdx) {
                     lines.remove(at: installIdx)
-                    // 同时移除节头前的空行
                     if
                         installIdx > 0,
                         lines[installIdx - 1].trimmingCharacters(in: .whitespaces).isEmpty
@@ -133,6 +138,13 @@ final class RegistryService: SourceConfigServiceProtocol {
                 return trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key
             }
             lines.insert("\(key)=\(url)", at: 0)
+        } else if type == .yarn {
+            lines.removeAll { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("#") else { return false }
+                return trimmed.hasPrefix("\(key) ")
+            }
+            lines.insert("\(key) \"\(url)\"", at: 0)
         } else {
             if
                 let globalIdx = lines.firstIndex(where: {
