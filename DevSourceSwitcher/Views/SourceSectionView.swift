@@ -11,6 +11,7 @@ struct SourceSectionView: View {
             SettingsHeader(
                 title: "\(type.displayName) 环境配置",
                 icon: type == .npm ? "network" : type == .yarn ? "screwdriver" : "shippingbox")
+                .frame(height: 20)
 
             configFileButton(for: type)
 
@@ -61,6 +62,7 @@ struct SourceSectionView: View {
             .foregroundStyle(Color.accentColor)
             Spacer()
         }
+        .frame(height: 16)
     }
 
     private var defaultSourcePicker: some View {
