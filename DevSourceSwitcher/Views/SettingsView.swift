@@ -10,17 +10,21 @@ struct SettingsView: View {
                 .tabItem { Label("NPM 源", systemImage: "network") }
                 .tag(0)
 
+            SourceDetailView(viewModel: viewModel, type: .yarn)
+                .tabItem { Label("Yarn 源", systemImage: "screwdriver") }
+                .tag(1)
+
             SourceDetailView(viewModel: viewModel, type: .pip)
                 .tabItem { Label("PIP 源", systemImage: "shippingbox") }
-                .tag(1)
+                .tag(2)
 
             GeneralSettingsView(viewModel: viewModel)
                 .tabItem { Label("通用", systemImage: "gearshape") }
-                .tag(2)
+                .tag(3)
 
             AboutView()
                 .tabItem { Label("关于", systemImage: "info.circle") }
-                .tag(3)
+                .tag(4)
         }
         .frame(width: 600, height: 440)
         .alert("切换失败", isPresented: Binding(

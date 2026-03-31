@@ -7,6 +7,7 @@ final class SourceManager: ObservableObject {
 
     @Published var config: AppConfig
     @Published private(set) var activeNpmSourceId: UUID?
+    @Published private(set) var activeYarnSourceId: UUID?
     @Published private(set) var activePipSourceId: UUID?
     @Published var lastError: String?
 
@@ -29,6 +30,7 @@ final class SourceManager: ObservableObject {
     func refreshActiveSources() {
         config = storage.load()
         activeNpmSourceId = resolveActiveId(for: .npm)
+        activeYarnSourceId = resolveActiveId(for: .yarn)
         activePipSourceId = resolveActiveId(for: .pip)
     }
 

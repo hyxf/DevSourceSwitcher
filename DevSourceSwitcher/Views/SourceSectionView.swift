@@ -10,16 +10,9 @@ struct SourceSectionView: View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsHeader(
                 title: "\(type.displayName) 环境配置",
-                icon: type == .npm ? "network" : "shippingbox")
+                icon: type == .npm ? "network" : type == .yarn ? "screwdriver" : "shippingbox")
 
-            if type == .npm {
-                HStack(spacing: 16) {
-                    configFileButton(for: .npm)
-                    configFileButton(for: .yarn)
-                }
-            } else {
-                configFileButton(for: type)
-            }
+            configFileButton(for: type)
 
             VStack(spacing: 0) {
                 defaultSourcePicker
@@ -66,6 +59,7 @@ struct SourceSectionView: View {
             .buttonStyle(.plain)
             .font(.system(size: 11, design: .monospaced))
             .foregroundStyle(Color.accentColor)
+            Spacer()
         }
     }
 

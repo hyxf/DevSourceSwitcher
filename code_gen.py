@@ -1,68 +1,199 @@
 import os
 
-files_to_update = {
-    "DevSourceSwitcher/Views/MenuBarView.swift": """
-import SwiftUI
+files = {}
 
-struct MenuBarView: View {
-    @StateObject private var viewModel = MenuBarViewModel()
-    @Environment(\\.openSettings) private var openSettings
+files["DevSourceSwitcher/Services/RegistryService.swift"] = '''import Foundation
 
-    var body: some View {
-        Group {
-            sourceSubMenu(for: .npm, state: viewModel.npmState, icon: "shippingbox.fill")
-            sourceSubMenu(for: .pip, state: viewModel.pipState, icon: "pyramid.fill")
+final class RegistryService: SourceConfigServiceProtocol {
+    static let shared = RegistryService()
+    private let fileManager = FileManager.default
 
-            Divider()
+    private init() {}
 
-            Button("设置...") { openSettings() }
-            Button("刷新状态") { viewModel.refreshState() }
-
-            Divider()
-
-            Button("退出") {
-                NSApplication.shared.terminate(nil)
-            }
-        }
-        .onAppear { viewModel.refreshState() }
+    func switchRegistry(to source: SourceItem?, for type: SourceType) throws {
+        try writeRegistry(to: source, for: type)
     }
 
-    // MARK: - Subviews
+    func currentRegistryURL(for type: SourceType) -> String? {
+        guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
+            return nil
+        }
+        if type == .yarn {
+            return parseYarnRegistry(from: content)
+        }
+        return FileParser.parseValue(from: content, key: type.registryKey)
+    }
 
-    @ViewBuilder
-    private func sourceSubMenu(
-        for type: SourceType,
-        state: SourceToggleState,
-        icon: String) -> some View
-    {
-        let title = type == .npm ? "NPM Registry" : "PIP Index"
-        
-        // 核心方案：在 macOS 原生菜单中，"\\t" (Tab) 后的内容会自动实现右对齐布局
-        let menuTitle = "\\(title)\\t(\\(state.activeName))"
+    // MARK: - Private
 
-        Menu(menuTitle) {
-            ForEach(state.allSources) { source in
-                Toggle(source.name, isOn: Binding(
-                    get: { state.activeSourceId == source.id },
-                    set: { _ in viewModel.selectSource(source, for: type) }))
+    private func parseYarnRegistry(from content: String) -> String? {
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#") else { continue }
+            guard trimmed.hasPrefix("registry ") else { continue }
+            let value = trimmed
+                .dropFirst("registry ".count)
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\\"\'"))
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    private func writeRegistry(to source: SourceItem?, for type: SourceType) throws {
+        let targetURL = source?.url ?? type.officialURL
+        let fileURL = type.configPath
+        let dir = fileURL.deletingLastPathComponent()
+
+        BackupService.shared.backup(filePath: fileURL.path)
+
+        if !fileManager.fileExists(atPath: dir.path) {
+            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        let existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
+        var lines = existing.components(separatedBy: .newlines)
+        lines = updatedContent(lines, url: targetURL, for: type)
+
+        if type == .pip {
+            let host = httpHost(from: targetURL)
+            lines = updateTrustedHost(lines, host: host)
+        }
+
+        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
+            lines.removeLast()
+        }
+        lines.append("")
+
+        try lines.joined(separator: "\\n").write(to: fileURL, atomically: true, encoding: .utf8)
+    }
+
+    private func httpHost(from url: String) -> String? {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            trimmed.lowercased().hasPrefix("http://"),
+            let components = URLComponents(string: trimmed),
+            let host = components.host, !host.isEmpty else { return nil }
+        return host
+    }
+
+    private func isSectionEmpty(_ lines: [String], afterIndex sectionIdx: Int) -> Bool {
+        for i in (sectionIdx + 1) ..< lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") { break }
+            if !trimmed.isEmpty { return false }
+        }
+        return true
+    }
+
+    private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
+        var lines = lines
+        let key = "trusted-host"
+
+        if
+            let installIdx = lines.firstIndex(where: {
+                $0.trimmingCharacters(in: .whitespaces).lowercased() == "[install]"
+            })
+        {
+            var foundIdx: Int?
+            for i in (installIdx + 1) ..< lines.count {
+                let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("[") { break }
+                if let eqRange = trimmed.range(of: "=") {
+                    let k = trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                    if k == key {
+                        foundIdx = i
+                        break
+                    }
+                }
+            }
+
+            if let host {
+                if let idx = foundIdx {
+                    lines[idx] = "\\(key) = \\(host)"
+                } else {
+                    lines.insert("\\(key) = \\(host)", at: installIdx + 1)
+                }
+            } else {
+                if let idx = foundIdx {
+                    lines.remove(at: idx)
+                }
+                if isSectionEmpty(lines, afterIndex: installIdx) {
+                    lines.remove(at: installIdx)
+                    if
+                        installIdx > 0,
+                        lines[installIdx - 1].trimmingCharacters(in: .whitespaces).isEmpty
+                    {
+                        lines.remove(at: installIdx - 1)
+                    }
+                }
+            }
+        } else {
+            if let host {
+                lines.append("")
+                lines.append("[install]")
+                lines.append("\\(key) = \\(host)")
             }
         }
+
+        return lines
+    }
+
+    private func updatedContent(_ lines: [String], url: String, for type: SourceType) -> [String] {
+        var lines = lines
+        let key = type.registryKey
+
+        if type == .npm {
+            lines.removeAll { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard
+                    !trimmed.hasPrefix("#"), !trimmed.hasPrefix(";"),
+                    let eqRange = trimmed.range(of: "=") else { return false }
+                return trimmed[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces) == key
+            }
+            lines.insert("\\(key)=\\(url)", at: 0)
+        } else if type == .yarn {
+            lines.removeAll { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("#") else { return false }
+                return trimmed.hasPrefix("\\(key) ")
+            }
+            lines.insert("\\(key) \\(url)", at: 0)
+        } else {
+            if
+                let globalIdx = lines.firstIndex(where: {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "[global]"
+                })
+            {
+                var foundInGlobal = false
+                for i in (globalIdx + 1) ..< lines.count {
+                    let line = lines[i].trimmingCharacters(in: .whitespaces)
+                    if line.hasPrefix("[") { break }
+                    if let eqRange = line.range(of: "=") {
+                        let k = line[..<eqRange.lowerBound].trimmingCharacters(in: .whitespaces)
+                        if k == key {
+                            lines[i] = "\\(key) = \\(url)"
+                            foundInGlobal = true
+                            break
+                        }
+                    }
+                }
+                if !foundInGlobal {
+                    lines.insert("\\(key) = \\(url)", at: globalIdx + 1)
+                }
+            } else {
+                lines.insert("[global]", at: 0)
+                lines.insert("\\(key) = \\(url)", at: 1)
+            }
+        }
+
+        return lines
     }
 }
-"""
-}
+'''
 
-def apply_updates():
-    for path, content in files_to_update.items():
-        directory = os.path.dirname(path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
-        
-        # 写入文件，\\t 在 Python 字符串中需正确转义
-        final_content = content.strip().replace('\\\\t', '\\t').replace('\\\\', '\\')
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(final_content + "\n")
-        print(f"Successfully implemented right-alignment via Tab: {path}")
-
-if __name__ == "__main__":
-    apply_updates()
+for path, content in files.items():
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"已写入：{path}")

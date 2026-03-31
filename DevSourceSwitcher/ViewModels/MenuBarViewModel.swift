@@ -11,13 +11,13 @@ struct SourceToggleState: Equatable {
 @MainActor
 final class MenuBarViewModel: ObservableObject {
     @Published private(set) var npmState: SourceToggleState = .init()
+    @Published private(set) var yarnState: SourceToggleState = .init()
     @Published private(set) var pipState: SourceToggleState = .init()
 
     private let manager = SourceManager.shared
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // 使用 receive(on: RunLoop.main) 确保在 Manager 属性 didSet 之后执行
         manager.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -38,13 +38,18 @@ final class MenuBarViewModel: ObservableObject {
 
     private func updateStates() {
         npmState = makeState(for: .npm)
+        yarnState = makeState(for: .yarn)
         pipState = makeState(for: .pip)
     }
 
     private func makeState(for type: SourceType) -> SourceToggleState {
         let config = manager.config
         let sources = config.sources(for: type)
-        let activeId = (type == .npm) ? manager.activeNpmSourceId : manager.activePipSourceId
+        let activeId: UUID? = switch type {
+        case .npm: manager.activeNpmSourceId
+        case .yarn: manager.activeYarnSourceId
+        case .pip: manager.activePipSourceId
+        }
 
         let activeName: String = {
             if let id = activeId, let name = sources.first(where: { $0.id == id })?.name {

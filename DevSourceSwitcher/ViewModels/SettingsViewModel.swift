@@ -25,6 +25,10 @@ final class SettingsViewModel: ObservableObject {
         manager.activeNpmSourceId
     }
 
+    var activeYarnSourceId: UUID? {
+        manager.activeYarnSourceId
+    }
+
     var activePipSourceId: UUID? {
         manager.activePipSourceId
     }
@@ -38,7 +42,11 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func activeSourceId(for type: SourceType) -> UUID? {
-        type == .npm ? activeNpmSourceId : activePipSourceId
+        switch type {
+        case .npm: activeNpmSourceId
+        case .yarn: activeYarnSourceId
+        case .pip: activePipSourceId
+        }
     }
 
     func updateDefault(type: SourceType, id: UUID) {
@@ -49,23 +57,33 @@ final class SettingsViewModel: ObservableObject {
     func addSource(type: SourceType, name: String, url: String) -> Bool {
         guard validate(name: name, url: url, for: type) else { return false }
         let item = SourceItem(name: name.trimmed, url: url.trimmed)
-        if type == .npm { manager.config.npmSources.append(item) }
-        else { manager.config.pipSources.append(item) }
+        switch type {
+        case .npm: manager.config.npmSources.append(item)
+        case .yarn: manager.config.yarnSources.append(item)
+        case .pip: manager.config.pipSources.append(item)
+        }
         manager.saveConfig()
         return true
     }
 
     func updateSource(type: SourceType, id: UUID, name: String, url: String) -> Bool {
         guard validate(name: name, url: url, for: type, excludeId: id) else { return false }
-        if type == .npm, let idx = manager.config.npmSources.firstIndex(where: { $0.id == id }) {
-            manager.config.npmSources[idx].name = name.trimmed
-            manager.config.npmSources[idx].url = url.trimmed
-        } else if
-            type == .pip,
-            let idx = manager.config.pipSources.firstIndex(where: { $0.id == id })
-        {
-            manager.config.pipSources[idx].name = name.trimmed
-            manager.config.pipSources[idx].url = url.trimmed
+        switch type {
+        case .npm:
+            if let idx = manager.config.npmSources.firstIndex(where: { $0.id == id }) {
+                manager.config.npmSources[idx].name = name.trimmed
+                manager.config.npmSources[idx].url = url.trimmed
+            }
+        case .yarn:
+            if let idx = manager.config.yarnSources.firstIndex(where: { $0.id == id }) {
+                manager.config.yarnSources[idx].name = name.trimmed
+                manager.config.yarnSources[idx].url = url.trimmed
+            }
+        case .pip:
+            if let idx = manager.config.pipSources.firstIndex(where: { $0.id == id }) {
+                manager.config.pipSources[idx].name = name.trimmed
+                manager.config.pipSources[idx].url = url.trimmed
+            }
         }
         manager.saveConfig()
         return true
@@ -73,10 +91,10 @@ final class SettingsViewModel: ObservableObject {
 
     func deleteSource(type: SourceType, item: SourceItem) {
         guard !item.isBuiltIn else { return }
-        if type == .npm {
-            manager.config.npmSources.removeAll { $0.id == item.id }
-        } else {
-            manager.config.pipSources.removeAll { $0.id == item.id }
+        switch type {
+        case .npm: manager.config.npmSources.removeAll { $0.id == item.id }
+        case .yarn: manager.config.yarnSources.removeAll { $0.id == item.id }
+        case .pip: manager.config.pipSources.removeAll { $0.id == item.id }
         }
         manager.saveConfig()
     }
@@ -86,6 +104,7 @@ final class SettingsViewModel: ObservableObject {
         manager.config = defaults
         manager.saveConfig()
         manager.selectSource(defaults.defaultNpmSource, for: .npm)
+        manager.selectSource(defaults.defaultYarnSource, for: .yarn)
         manager.selectSource(defaults.defaultPipSource, for: .pip)
     }
 

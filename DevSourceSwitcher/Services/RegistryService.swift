@@ -8,20 +8,33 @@ final class RegistryService: SourceConfigServiceProtocol {
 
     func switchRegistry(to source: SourceItem?, for type: SourceType) throws {
         try writeRegistry(to: source, for: type)
-
-        if type == .npm {
-            try? writeRegistry(to: source, for: .yarn)
-        }
     }
 
     func currentRegistryURL(for type: SourceType) -> String? {
         guard let content = try? String(contentsOf: type.configPath, encoding: .utf8) else {
             return nil
         }
+        if type == .yarn {
+            return parseYarnRegistry(from: content)
+        }
         return FileParser.parseValue(from: content, key: type.registryKey)
     }
 
     // MARK: - Private
+
+    private func parseYarnRegistry(from content: String) -> String? {
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#") else { continue }
+            guard trimmed.hasPrefix("registry ") else { continue }
+            let value = trimmed
+                .dropFirst("registry ".count)
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
 
     private func writeRegistry(to source: SourceItem?, for type: SourceType) throws {
         let targetURL = source?.url ?? type.officialURL
@@ -51,7 +64,6 @@ final class RegistryService: SourceConfigServiceProtocol {
         try lines.joined(separator: "\n").write(to: fileURL, atomically: true, encoding: .utf8)
     }
 
-    /// 若 url 为 http:// 开头则返回 host，否则返回 nil
     private func httpHost(from url: String) -> String? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
@@ -61,7 +73,6 @@ final class RegistryService: SourceConfigServiceProtocol {
         return host
     }
 
-    /// 检查某个 section 下（从 sectionIdx+1 开始）是否还有实质内容
     private func isSectionEmpty(_ lines: [String], afterIndex sectionIdx: Int) -> Bool {
         for i in (sectionIdx + 1) ..< lines.count {
             let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
@@ -71,7 +82,6 @@ final class RegistryService: SourceConfigServiceProtocol {
         return true
     }
 
-    /// 更新 [install] 节的 trusted-host：host 非 nil 时写入，nil 时移除
     private func updateTrustedHost(_ lines: [String], host: String?) -> [String] {
         var lines = lines
         let key = "trusted-host"
@@ -144,7 +154,7 @@ final class RegistryService: SourceConfigServiceProtocol {
                 guard !trimmed.hasPrefix("#") else { return false }
                 return trimmed.hasPrefix("\(key) ")
             }
-            lines.insert("\(key) \"\(url)\"", at: 0)
+            lines.insert("\(key) \(url)", at: 0)
         } else {
             if
                 let globalIdx = lines.firstIndex(where: {

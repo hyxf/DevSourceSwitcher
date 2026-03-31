@@ -7,6 +7,7 @@ struct MenuBarView: View {
     var body: some View {
         Group {
             sourceSubMenu(for: .npm, state: viewModel.npmState, icon: "shippingbox.fill")
+            sourceSubMenu(for: .yarn, state: viewModel.yarnState, icon: "screwdriver")
             sourceSubMenu(for: .pip, state: viewModel.pipState, icon: "pyramid.fill")
 
             Divider()
@@ -31,9 +32,12 @@ struct MenuBarView: View {
         state: SourceToggleState,
         icon: String) -> some View
     {
-        let title = type == .npm ? "NPM Registry" : "PIP Index"
+        let title = switch type {
+        case .npm: "NPM Registry"
+        case .yarn: "Yarn Registry"
+        case .pip: "PIP Index"
+        }
 
-        // 核心方案：在 macOS 原生菜单中，"\t" (Tab) 后的内容会自动实现右对齐布局
         let menuTitle = "\(title)\t - (\(state.activeName))"
 
         Menu(menuTitle) {
