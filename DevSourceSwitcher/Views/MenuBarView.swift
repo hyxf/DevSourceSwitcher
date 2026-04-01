@@ -38,7 +38,7 @@ struct MenuBarView: View {
         case .git: "Git Proxy      "
         }
 
-        Menu("\(title)\t - (\(state.activeName))") {
+        Menu {
             ForEach(state.allSources) { source in
                 Toggle(source.name, isOn: Binding(
                     get: { state.activeSourceId == source.id },
@@ -48,6 +48,8 @@ struct MenuBarView: View {
                 Divider()
                 Button("未启用") { viewModel.selectSource(nil, for: .git) }
             }
+        } label: {
+            Label("\(title)\t - (\(state.activeName))", systemImage: icon)
         }
     }
 }
