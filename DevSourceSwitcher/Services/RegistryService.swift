@@ -25,6 +25,202 @@ final class RegistryService: SourceConfigServiceProtocol {
         return url
     }
 
+    // MARK: - SSH Config
+
+    private let sshBlockMarker = "# Added by DevSourceSwitcher"
+
+    /// 更新 ~/.ssh/config 中的 GitHub SSH 代理配置
+    func updateSSHConfig(proxy: String?, onlyGithub: Bool) {
+        let sshConfigURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".ssh/config")
+        let sshDir = sshConfigURL.deletingLastPathComponent()
+
+        if !fileManager.fileExists(atPath: sshDir.path) {
+            try? fileManager.createDirectory(at: sshDir, withIntermediateDirectories: true)
+        }
+
+        let existing = (try? String(contentsOf: sshConfigURL, encoding: .utf8)) ?? ""
+        var lines = existing.components(separatedBy: "\n")
+
+        if
+            let proxy, !proxy.isEmpty,
+            let proxyCommand = buildProxyCommand(from: proxy)
+        {
+            lines = upsertSSHBlock(lines, proxyCommand: proxyCommand)
+        } else {
+            lines = removeSSHBlock(lines)
+        }
+
+        while lines.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            lines.removeLast()
+        }
+        lines.append("")
+
+        try? lines.joined(separator: "\n").write(
+            to: sshConfigURL,
+            atomically: true,
+            encoding: .utf8)
+    }
+
+    /// 开启：
+    /// 1. 先 removeSSHBlock 清理（幂等）
+    /// 2. 若存在原有 Host github.com 块 → 将其每行加 `# ` 注释
+    /// 3. 新块始终追加到文件末尾，前置两个空行
+    private func upsertSSHBlock(_ lines: [String], proxyCommand: String) -> [String] {
+        // 先清理（幂等），同时恢复之前注释的原始块
+        var result = removeSSHBlock(lines)
+
+        // 若存在原有 Host github.com 块，将其注释掉
+        if let blockRange = findGithubHostBlock(result) {
+            let commented = result[blockRange].map { line -> String in
+                line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? line : "# \(line)"
+            }
+            result.replaceSubrange(blockRange, with: commented)
+        }
+
+        // 新块始终追加到文件末尾，前置两个空行
+        let newBlock: [String] = [
+            "",
+            "",
+            sshBlockMarker,
+            "Host github.com",
+            "  HostName ssh.github.com",
+            "  Port 443",
+            "  User git",
+            "  IdentityFile ~/.ssh/id_rsa",
+            "  ProxyCommand \(proxyCommand)"
+        ]
+        result.append(contentsOf: newBlock)
+
+        return result
+    }
+
+    /// 关闭：
+    /// 1. 通过标记行精确定位并移除本工具写入的块
+    /// 2. 将紧邻上方被注释的原始块恢复
+    private func removeSSHBlock(_ lines: [String]) -> [String] {
+        var result = lines
+
+        guard
+            let markerIdx = result.firstIndex(where: {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines) == sshBlockMarker
+            }) else
+        {
+            return result
+        }
+
+        let blockStart = markerIdx + 1
+        guard
+            blockStart < result.count,
+            result[blockStart].trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "host github.com" else
+        {
+            result.remove(at: markerIdx)
+            return result
+        }
+
+        // 确定本工具块结束位置
+        var blockEnd = blockStart + 1
+        while blockEnd < result.count {
+            let trimmed = result[blockEnd].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.lowercased().hasPrefix("host ") { break }
+            blockEnd += 1
+        }
+
+        // 移除：前置空行 + 标记行 + 本工具块
+        var removeStart = markerIdx
+        // 往上最多移除两个空行
+        var blankCount = 0
+        while removeStart > 0, blankCount < 2 {
+            if result[removeStart - 1].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                removeStart -= 1
+                blankCount += 1
+            } else {
+                break
+            }
+        }
+        result.removeSubrange(removeStart ..< blockEnd)
+
+        // 恢复紧接在 removeStart 之前的被注释原始块
+        var restoreEnd = removeStart
+        var restoreStart = removeStart - 1
+        while restoreStart >= 0 {
+            let trimmed = result[restoreStart].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("#") || trimmed.isEmpty {
+                restoreStart -= 1
+            } else {
+                break
+            }
+        }
+        restoreStart += 1
+
+        let candidateLines = Array(result[restoreStart ..< restoreEnd])
+        let hasCommentedHost = candidateLines.contains {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased().hasPrefix("# host github.com")
+        }
+        if hasCommentedHost {
+            let restored = candidateLines.map { line -> String in
+                var t = line
+                if t.hasPrefix("# ") { t = String(t.dropFirst(2)) }
+                else if t == "#" { t = "" }
+                return t
+            }
+            result.replaceSubrange(restoreStart ..< restoreEnd, with: restored)
+        }
+
+        return result
+    }
+
+    /// 返回未被注释的 Host github.com 块的行范围
+    private func findGithubHostBlock(_ lines: [String]) -> Range<Int>? {
+        guard
+            let startIdx = lines.firstIndex(where: {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "host github.com"
+            }) else { return nil }
+
+        var endIdx = startIdx + 1
+        while endIdx < lines.count {
+            let trimmed = lines[endIdx].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.lowercased().hasPrefix("host ") { break }
+            endIdx += 1
+        }
+        return startIdx ..< endIdx
+    }
+
+    /// 根据代理协议生成对应的 ProxyCommand
+    private func buildProxyCommand(from proxy: String) -> String? {
+        guard let (host, port) = parseProxyHostPort(proxy) else { return nil }
+        let lower = proxy.lowercased()
+        if lower.hasPrefix("socks5") {
+            return "nc -x \(host):\(port) -X 5 %h %p"
+        } else if lower.hasPrefix("http") {
+            return "nc -x \(host):\(port) -X connect %h %p"
+        }
+        return "nc -x \(host):\(port) -X 5 %h %p"
+    }
+
+    /// 从代理 URL 中解析 host 和 port
+    private func parseProxyHostPort(_ proxy: String) -> (String, String)? {
+        let schemes = ["socks5h://", "socks5://", "socks4://", "http://", "https://"]
+        var rest = proxy
+        for scheme in schemes {
+            if proxy.lowercased().hasPrefix(scheme) {
+                rest = String(proxy.dropFirst(scheme.count))
+                break
+            }
+        }
+        let parts = rest.components(separatedBy: ":")
+        if parts.count >= 2 {
+            let host = parts[0]
+            let port = parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return (host, port)
+        }
+        return nil
+    }
+
+    // MARK: - Private (原有方法不变)
+
     private func parseGitProxy(from content: String) -> String? {
         let lines = content.components(separatedBy: .newlines)
         let sections = [

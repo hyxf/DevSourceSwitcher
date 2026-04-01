@@ -10,11 +10,13 @@ struct AppConfig: Codable {
     var defaultPipSourceId: UUID
     var defaultGitSourceId: UUID
     var gitOnlyGithub: Bool
+    var gitSupportSSH: Bool
 
     enum CodingKeys: String, CodingKey {
         case npmSources, yarnSources, pipSources, gitSources
         case defaultNpmSourceId, defaultYarnSourceId, defaultPipSourceId, defaultGitSourceId
         case gitOnlyGithub
+        case gitSupportSSH
     }
 
     init(
@@ -26,7 +28,8 @@ struct AppConfig: Codable {
         defaultYarnSourceId: UUID,
         defaultPipSourceId: UUID,
         defaultGitSourceId: UUID,
-        gitOnlyGithub: Bool)
+        gitOnlyGithub: Bool,
+        gitSupportSSH: Bool = false)
     {
         self.npmSources = npmSources
         self.yarnSources = yarnSources
@@ -37,6 +40,7 @@ struct AppConfig: Codable {
         self.defaultPipSourceId = defaultPipSourceId
         self.defaultGitSourceId = defaultGitSourceId
         self.gitOnlyGithub = gitOnlyGithub
+        self.gitSupportSSH = gitSupportSSH
     }
 
     init(from decoder: Decoder) throws {
@@ -65,6 +69,7 @@ struct AppConfig: Codable {
         defaultGitSourceId = (try? container.decode(UUID.self, forKey: .defaultGitSourceId)) ??
             defaults.defaultGitSourceId
         gitOnlyGithub = (try? container.decode(Bool.self, forKey: .gitOnlyGithub)) ?? true
+        gitSupportSSH = (try? container.decode(Bool.self, forKey: .gitSupportSSH)) ?? false
     }
 
     static func defaultConfig() -> AppConfig {
@@ -100,7 +105,8 @@ struct AppConfig: Codable {
             defaultYarnSourceId: yarn.defaultId,
             defaultPipSourceId: pipAliyun.id,
             defaultGitSourceId: gitSocks5.id,
-            gitOnlyGithub: true)
+            gitOnlyGithub: true,
+            gitSupportSSH: false)
     }
 
     static func defaultYarnSources() -> (sources: [SourceItem], defaultId: UUID) {

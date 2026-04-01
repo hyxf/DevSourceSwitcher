@@ -17,7 +17,7 @@ struct SourceSectionView: View {
                 .frame(height: 24, alignment: .leading)
 
             Spacer().frame(height: 12)
-            configFileButton(for: type).frame(height: 16, alignment: .leading)
+            configFileRow(for: type).frame(height: 16, alignment: .leading)
             Spacer().frame(height: 16)
 
             VStack(spacing: 0) {
@@ -37,6 +37,9 @@ struct SourceSectionView: View {
                     Toggle("仅针对 GitHub 生效", isOn: $viewModel.gitOnlyGithub)
                         .toggleStyle(.switch).scaleEffect(0.7).font(.system(size: 13))
                         .offset(x: -10)
+                    Toggle("支持 SSH", isOn: $viewModel.gitSupportSSH)
+                        .toggleStyle(.switch).scaleEffect(0.7).font(.system(size: 13))
+                        .offset(x: -10)
                     Spacer()
                 }
                 .frame(height: 32)
@@ -44,16 +47,35 @@ struct SourceSectionView: View {
         }
     }
 
-    private func configFileButton(for configType: SourceType) -> some View {
-        HStack(spacing: 4) {
-            Text("配置文件：").font(.system(size: 11)).foregroundStyle(.secondary)
-            Button(configType.configPath.path) {
+    /// 配置文件行：.gitconfig 始终显示，SSH 配置文件仅在支持 SSH 开启时显示
+    private func configFileRow(for configType: SourceType) -> some View {
+        HStack(spacing: 12) {
+            configFileButton(path: configType.configPath.path) {
                 let url = configType.configPath
                 let text = (try? String(contentsOf: url, encoding: .utf8)) ?? "（读取失败）"
                 openWindow(value: ConfigContent(path: url.path, content: text))
+            }
+
+            if configType == .git, viewModel.gitSupportSSH {
+                let sshConfigURL = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".ssh/config")
+                configFileButton(path: sshConfigURL.path) {
+                    let text = (try? String(contentsOf: sshConfigURL, encoding: .utf8)) ?? "（读取失败）"
+                    openWindow(value: ConfigContent(path: sshConfigURL.path, content: text))
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    private func configFileButton(path: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text("配置文件：").font(.system(size: 11)).foregroundStyle(.secondary)
+            Button(path) {
+                action()
             }.buttonStyle(.plain).font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color.accentColor).lineLimit(1)
-            Spacer()
         }
     }
 
@@ -67,7 +89,7 @@ struct SourceSectionView: View {
                     viewModel.updateDefault(type: type, id: id == unselectedID ? nil : id)
                 })) {
                     if type == .git {
-                        // Git 逻辑：始终支持“未启用”选项
+                        // Git 逻辑：始终支持"未启用"选项
                         if viewModel.activeSourceId(for: type) == nil {
                             let currentVal = RegistryService.shared
                                 .currentRegistryURL(for: .git) ?? ""
@@ -76,7 +98,7 @@ struct SourceSectionView: View {
                             Text("未启用").tag(unselectedID)
                         }
                     } else {
-                        // NPM/Yarn/PIP 逻辑：不支持“未启用”，仅在不匹配列表时显示“自定义源”
+                        // NPM/Yarn/PIP 逻辑：不支持"未启用"，仅在不匹配列表时显示"自定义源"
                         if viewModel.activeSourceId(for: type) == nil {
                             Text("自定义源").tag(unselectedID)
                         }

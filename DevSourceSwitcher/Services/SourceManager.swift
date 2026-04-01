@@ -38,6 +38,11 @@ final class SourceManager: ObservableObject {
         do {
             lastError = nil
             try registry.switchRegistry(to: source, for: type)
+            // 若 SSH 已开启，切换代理时同步更新 SSH 配置
+            if type == .git, config.gitSupportSSH {
+                let proxyURL = source?.url
+                registry.updateSSHConfig(proxy: proxyURL, onlyGithub: config.gitOnlyGithub)
+            }
             refreshActiveSources()
         } catch {
             lastError = error.localizedDescription
@@ -59,6 +64,21 @@ final class SourceManager: ObservableObject {
         } else {
             // 否则维持未启用状态
             selectSource(nil, for: .git)
+        }
+    }
+
+    func toggleGitSupportSSH() {
+        config.gitSupportSSH.toggle()
+        saveConfig()
+
+        if config.gitSupportSSH {
+            // 开启：将当前代理同步写入 SSH 配置
+            let currentURL = registry.currentRegistryURL(for: .git) ?? ""
+            let proxyURL = currentURL.isEmpty ? nil : currentURL
+            registry.updateSSHConfig(proxy: proxyURL, onlyGithub: config.gitOnlyGithub)
+        } else {
+            // 关闭：移除 SSH 配置中的代理
+            registry.updateSSHConfig(proxy: nil, onlyGithub: config.gitOnlyGithub)
         }
     }
 

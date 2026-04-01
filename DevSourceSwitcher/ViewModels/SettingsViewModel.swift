@@ -28,6 +28,11 @@ final class SettingsViewModel: ObservableObject {
         set { manager.toggleGitOnlyGithub() }
     }
 
+    var gitSupportSSH: Bool {
+        get { config.gitSupportSSH }
+        set { manager.toggleGitSupportSSH() }
+    }
+
     func sources(for type: SourceType) -> [SourceItem] {
         config.sources(for: type)
     }
