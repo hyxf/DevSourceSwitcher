@@ -50,7 +50,7 @@ struct SourceSectionView: View {
     /// 配置文件行：.gitconfig 始终显示，SSH 配置文件仅在支持 SSH 开启时显示
     private func configFileRow(for configType: SourceType) -> some View {
         HStack(spacing: 12) {
-            configFileButton(path: configType.configPath.path) {
+            configFileButton(label: "配置文件：", path: configType.configPath.path) {
                 let url = configType.configPath
                 let text = (try? String(contentsOf: url, encoding: .utf8)) ?? "（读取失败）"
                 openWindow(value: ConfigContent(path: url.path, content: text))
@@ -59,7 +59,7 @@ struct SourceSectionView: View {
             if configType == .git, viewModel.gitSupportSSH {
                 let sshConfigURL = FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent(".ssh/config")
-                configFileButton(path: sshConfigURL.path) {
+                configFileButton(label: "SSH 配置：", path: sshConfigURL.path) {
                     let text = (try? String(contentsOf: sshConfigURL, encoding: .utf8)) ?? "（读取失败）"
                     openWindow(value: ConfigContent(path: sshConfigURL.path, content: text))
                 }
@@ -69,9 +69,13 @@ struct SourceSectionView: View {
         }
     }
 
-    private func configFileButton(path: String, action: @escaping () -> Void) -> some View {
+    private func configFileButton(
+        label: String,
+        path: String,
+        action: @escaping () -> Void) -> some View
+    {
         HStack(spacing: 4) {
-            Text("配置文件：").font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
             Button(path) {
                 action()
             }.buttonStyle(.plain).font(.system(size: 11, design: .monospaced))
