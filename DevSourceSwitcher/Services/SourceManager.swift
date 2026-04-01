@@ -38,9 +38,9 @@ final class SourceManager: ObservableObject {
         do {
             lastError = nil
             try registry.switchRegistry(to: source, for: type)
-            // 若 SSH 已开启，切换代理时同步更新 SSH 配置
-            if type == .git, config.gitSupportSSH {
-                let proxyURL = source?.url
+            // 修复：source 为 nil（未启用）时不触发 SSH 更新，避免意外清除 SSH 配置
+            // SSH 的移除只由 toggleGitSupportSSH() 关闭开关时负责
+            if type == .git, config.gitSupportSSH, let proxyURL = source?.url {
                 registry.updateSSHConfig(proxy: proxyURL, onlyGithub: config.gitOnlyGithub)
             }
             refreshActiveSources()

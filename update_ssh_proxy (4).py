@@ -1,4 +1,134 @@
+#!/usr/bin/env python3
+"""
+执行路径：工程根目录 DevSourceSwitcher/
+用法：python3 update_ssh_proxy.py
+更新：Services/RegistryService.swift、Services/SourceManager.swift
+"""
+
+import os
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+SRC = os.path.join(BASE, "DevSourceSwitcher")
+
+
+def write(rel_path: str, content: str):
+    path = os.path.join(SRC, rel_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ 已写入：{rel_path}")
+
+
+# ─────────────────────────────────────────────
+# Services/SourceManager.swift
+#
+# 修复问题 1：selectSource() 中 source=nil 时
+# 不再触发 updateSSHConfig，避免意外清除 SSH 配置。
+# SSH 的移除只由 toggleGitSupportSSH() 关闭开关时负责。
+# ─────────────────────────────────────────────
+SOURCE_MANAGER = r"""import Combine
 import Foundation
+
+@MainActor
+final class SourceManager: ObservableObject {
+    static let shared = SourceManager()
+
+    @Published var config: AppConfig
+    @Published private(set) var activeNpmSourceId: UUID?
+    @Published private(set) var activeYarnSourceId: UUID?
+    @Published private(set) var activePipSourceId: UUID?
+    @Published private(set) var activeGitSourceId: UUID?
+    @Published var lastError: String?
+
+    private let storage = ConfigStorageService.shared
+    private let registry = RegistryService.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    private init() {
+        config = storage.load()
+        refreshActiveSources()
+
+        NotificationCenter.default.publisher(for: .configDidChange)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshActiveSources() }
+            .store(in: &cancellables)
+    }
+
+    func refreshActiveSources() {
+        config = storage.load()
+        activeNpmSourceId = resolveActiveId(for: .npm)
+        activeYarnSourceId = resolveActiveId(for: .yarn)
+        activePipSourceId = resolveActiveId(for: .pip)
+        activeGitSourceId = resolveActiveId(for: .git)
+    }
+
+    func selectSource(_ source: SourceItem?, for type: SourceType) {
+        do {
+            lastError = nil
+            try registry.switchRegistry(to: source, for: type)
+            // 修复：source 为 nil（未启用）时不触发 SSH 更新，避免意外清除 SSH 配置
+            // SSH 的移除只由 toggleGitSupportSSH() 关闭开关时负责
+            if type == .git, config.gitSupportSSH, let proxyURL = source?.url {
+                registry.updateSSHConfig(proxy: proxyURL, onlyGithub: config.gitOnlyGithub)
+            }
+            refreshActiveSources()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func toggleGitOnlyGithub() {
+        config.gitOnlyGithub.toggle()
+        saveConfig()
+
+        let currentURL = registry.currentRegistryURL(for: .git) ?? ""
+        if let source = config.gitSources.first(where: { $0.id == activeGitSourceId }) {
+            // 如果当前是已知源，重新应用它
+            selectSource(source, for: .git)
+        } else if !currentURL.isEmpty {
+            // 如果当前是自定义代理，以当前 URL 重新应用配置
+            let tempSource = SourceItem(name: "Custom", url: currentURL)
+            selectSource(tempSource, for: .git)
+        } else {
+            // 否则维持未启用状态
+            selectSource(nil, for: .git)
+        }
+    }
+
+    func toggleGitSupportSSH() {
+        config.gitSupportSSH.toggle()
+        saveConfig()
+
+        if config.gitSupportSSH {
+            // 开启：将当前代理同步写入 SSH 配置
+            let currentURL = registry.currentRegistryURL(for: .git) ?? ""
+            let proxyURL = currentURL.isEmpty ? nil : currentURL
+            registry.updateSSHConfig(proxy: proxyURL, onlyGithub: config.gitOnlyGithub)
+        } else {
+            // 关闭：移除 SSH 配置中的代理
+            registry.updateSSHConfig(proxy: nil, onlyGithub: config.gitOnlyGithub)
+        }
+    }
+
+    func saveConfig() {
+        try? storage.save(config)
+    }
+
+    private func resolveActiveId(for type: SourceType) -> UUID? {
+        let currentURL = registry.currentRegistryURL(for: type) ?? ""
+        return config.matchedSourceId(for: type, url: currentURL)
+    }
+}
+"""
+
+# ─────────────────────────────────────────────
+# Services/RegistryService.swift
+#
+# 修复问题 2：removeSSHBlock() 向上扫描遇空行即停，
+#             不再跨空行，避免误伤上方无关注释行。
+# 修复问题 3：findGithubHostBlock() 同时识别 Match 块头。
+# ─────────────────────────────────────────────
+REGISTRY_SERVICE = r"""import Foundation
 
 final class RegistryService: SourceConfigServiceProtocol {
     static let shared = RegistryService()
@@ -42,9 +172,8 @@ final class RegistryService: SourceConfigServiceProtocol {
         let existing = (try? String(contentsOf: sshConfigURL, encoding: .utf8)) ?? ""
         var lines = existing.components(separatedBy: "\n")
 
-        if
-            let proxy, !proxy.isEmpty,
-            let proxyCommand = buildProxyCommand(from: proxy)
+        if let proxy = proxy, !proxy.isEmpty,
+           let proxyCommand = buildProxyCommand(from: proxy)
         {
             lines = upsertSSHBlock(lines, proxyCommand: proxyCommand)
         } else {
@@ -56,10 +185,7 @@ final class RegistryService: SourceConfigServiceProtocol {
         }
         lines.append("")
 
-        try? lines.joined(separator: "\n").write(
-            to: sshConfigURL,
-            atomically: true,
-            encoding: .utf8)
+        try? lines.joined(separator: "\n").write(to: sshConfigURL, atomically: true, encoding: .utf8)
     }
 
     /// 开启：
@@ -85,7 +211,7 @@ final class RegistryService: SourceConfigServiceProtocol {
             "  Port 443",
             "  User git",
             "  IdentityFile ~/.ssh/id_rsa",
-            "  ProxyCommand \(proxyCommand)"
+            "  ProxyCommand \(proxyCommand)",
         ]
         result.append(contentsOf: newBlock)
 
@@ -98,20 +224,17 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func removeSSHBlock(_ lines: [String]) -> [String] {
         var result = lines
 
-        guard
-            let markerIdx = result.firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines) == sshBlockMarker
-            }) else
-        {
+        guard let markerIdx = result.firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines) == sshBlockMarker
+        }) else {
             return result
         }
 
         let blockStart = markerIdx + 1
-        guard
-            blockStart < result.count,
-            result[blockStart].trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased() == "host github.com" else
-        {
+        guard blockStart < result.count,
+              result[blockStart].trimmingCharacters(in: .whitespacesAndNewlines)
+                  .lowercased() == "host github.com"
+        else {
             result.remove(at: markerIdx)
             return result
         }
@@ -172,15 +295,14 @@ final class RegistryService: SourceConfigServiceProtocol {
     private func isSshBlockHeader(_ trimmed: String) -> Bool {
         let lower = trimmed.lowercased()
         return lower.hasPrefix("host ") || lower == "host" ||
-            lower.hasPrefix("match ") || lower == "match"
+               lower.hasPrefix("match ") || lower == "match"
     }
 
     /// 返回未被注释的 Host github.com 块的行范围
     private func findGithubHostBlock(_ lines: [String]) -> Range<Int>? {
-        guard
-            let startIdx = lines.firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "host github.com"
-            }) else { return nil }
+        guard let startIdx = lines.firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "host github.com"
+        }) else { return nil }
 
         var endIdx = startIdx + 1
         while endIdx < lines.count {
@@ -493,3 +615,16 @@ final class RegistryService: SourceConfigServiceProtocol {
         return host
     }
 }
+"""
+
+FILES = {
+    "Services/SourceManager.swift": SOURCE_MANAGER,
+    "Services/RegistryService.swift": REGISTRY_SERVICE,
+}
+
+if __name__ == "__main__":
+    print(f"工程根目录：{BASE}")
+    print(f"源码目录：{SRC}\n")
+    for rel, content in FILES.items():
+        write(rel, content)
+    print("\n🎉 写入完成，共更新 2 个文件。")
