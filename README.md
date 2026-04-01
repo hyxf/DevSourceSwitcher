@@ -97,6 +97,10 @@ git config --global --list | grep proxy
 
 ---
 
+## Support
+
+- https://github.com/sindresorhus/KeyboardShortcuts
+
 ## License
 
 [MIT](LICENSE)
