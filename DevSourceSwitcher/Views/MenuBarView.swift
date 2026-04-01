@@ -18,9 +18,20 @@ struct MenuBarView: View {
             sourceSubMenu(for: .git, state: viewModel.gitState, icon: "terminal.fill")
 
             Divider()
-            Button("设置...") { openSettings() }
+
+            Button {
+                openSettings()
+            } label: {
+                Label("设置...", systemImage: "gearshape")
+            }
+
             Divider()
-            Button("退出") { NSApplication.shared.terminate(nil) }
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Label("退出", systemImage: "power")
+            }
         }
         .onAppear { viewModel.refreshState() }
     }

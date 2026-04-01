@@ -142,7 +142,7 @@ final class RegistryService: SourceConfigServiceProtocol {
         result.removeSubrange(removeStart ..< blockEnd)
 
         // 恢复紧接在 removeStart 之前的被注释原始块
-        var restoreEnd = removeStart
+        let restoreEnd = removeStart
         var restoreStart = removeStart - 1
         while restoreStart >= 0 {
             let trimmed = result[restoreStart].trimmingCharacters(in: .whitespacesAndNewlines)
