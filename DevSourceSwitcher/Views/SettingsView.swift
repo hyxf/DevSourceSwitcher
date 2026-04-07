@@ -35,6 +35,18 @@ struct SettingsView: View {
         } message: {
             Text(viewModel.lastError ?? "未知错误")
         }
+        .onAppear {
+            makeWindowOnTop()
+        }
+    }
+
+    private func makeWindowOnTop() {
+        DispatchQueue.main.async {
+            if let window = NSApplication.shared.windows.first {
+                window.level = .floating // 🔥 关键
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 }
 
