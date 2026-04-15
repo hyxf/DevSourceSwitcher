@@ -21,6 +21,7 @@ targets:
         CURRENT_PROJECT_VERSION: "8"
         SWIFT_VERSION: "5.9"
         ENABLE_APP_SANDBOX: NO
+        ARCHS: "$(ARCHS_STANDARD)"
 
     info:
       path: DevSourceSwitcher/Info.plist
