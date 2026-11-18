@@ -24,6 +24,9 @@ report() {
     local detail="$2"
 
     if [[ "$JSON_OUTPUT" == true ]]; then
+        detail="${detail//\\/\\\\}"
+        detail="${detail//\"/\\\"}"
+        detail="${detail//$'\n'/\\n}"
         printf '{"status":"%s","action":"open-xcode-project","detail":"%s"}\n' \
             "$status" "$detail"
     else
@@ -93,14 +96,9 @@ if [[ "$CHECK_ONLY" == true ]]; then
     exit 0
 fi
 
-if [[ "$JSON_OUTPUT" == true ]]; then
-    if open -a "$XCODE_APP" "$PROJECT_PATH" >&2; then
-        report 'ok' 'Open request sent to the selected Xcode.app'
-    else
-        fail 'Could not send the project to Xcode; inspect the macOS open command error'
-    fi
-elif open -a "$XCODE_APP" "$PROJECT_PATH"; then
+if OPEN_ERROR="$(open -a "$XCODE_APP" "$PROJECT_PATH" 2>&1)"; then
     report 'ok' 'Open request sent to the selected Xcode.app'
 else
-    fail 'Could not send the project to Xcode; inspect the macOS open command error'
+    OPEN_ERROR="${OPEN_ERROR//$'\n'/; }"
+    fail "Could not send the project to the selected Xcode.app: $OPEN_ERROR"
 fi
