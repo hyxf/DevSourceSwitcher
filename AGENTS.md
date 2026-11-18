@@ -6,10 +6,12 @@
 
 ## 初始化项目
 
-- 如尚未安装项目生成工具，可运行 `brew install xcodegen`。
-- `xcodegen generate` 根据 `project.yml` 生成被 Git 忽略的 `DevSourceSwitcher.xcodeproj`。
+- 运行 `scripts/init-project.sh --check` 检查本机是否安装 `xcodegen`，并确认 `project.yml` 存在；该检查不会生成或修改项目文件。
+- 运行 `scripts/init-project.sh` 在已安装 `xcodegen` 时根据 `project.yml` 生成被 Git 忽略的 `DevSourceSwitcher.xcodeproj`。
+- 运行 `scripts/init-project.sh --install` 在缺少 `xcodegen` 时通过 Homebrew 安装，然后生成 Xcode 项目；此选项需要本机已安装 Homebrew。
+- 自动化调用可追加 `--json` 获取机器可读结果，例如 `scripts/init-project.sh --check --json`。`--check` 与 `--install` 互斥，未知参数会报错。
 
-修改 `project.yml` 后，重新运行 `xcodegen generate`，再使用 Xcode 打开项目。
+修改 `project.yml` 后，重新运行 `scripts/init-project.sh`，再使用 Xcode 打开项目。
 
 ## 构建与开发
 
