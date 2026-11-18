@@ -13,6 +13,7 @@ description: 根据当前 Git 改动生成符合仓库风格的中文提交消�
 2. 暂存区有内容时，不要把仅存在于未暂存区的改动写进提交消息。若同一文件同时有暂存和未暂存改动，以暂存区 diff 为准。
 3. 如有必要，查看与目标差异直接相关的文件，理解改动目的和影响。
 4. 总结主要改动，输出一条可直接使用的提交消息。
+5. 生成后，尝试将完整消息填入 VS Code Source Control 输入框，具体按下方“填入 VS Code”规则执行。
 
 检查时避免读取或展示密钥、令牌、密码等敏感内容。不要为了生成消息而修改文件或 Git 状态。
 
@@ -58,7 +59,16 @@ description: 根据当前 Git 改动生成符合仓库风格的中文提交消�
 
 ## 操作边界
 
-- 只生成并展示提交消息，不执行 `git add`、`git commit`、`git reset`、`git checkout` 或其他会改变 Git 状态的操作。
+- 可将已生成的消息填入 VS Code Source Control 输入框，但不得执行提交。只填入消息不会改变 Git 提交历史。
+- 不执行 `git add`、`git commit`、`git reset`、`git checkout` 或其他会改变 Git 状态的操作。
 - 不根据文件名臆测变更目的；以 diff 和相关代码为依据。
 - 如果没有可用改动，说明当前没有可总结的变更。
 - 如果改动目的无法从差异中判断，简要指出不确定之处，并向用户询问必要信息，不编造原因。
+
+## 填入 VS Code
+
+- Project Atlas VS 提供命令 `project-atlas.setGitCommitMessage`，接收完整提交消息作为第一个参数，可选地接收目标仓库 URI 作为第二个参数。扩展侧的调用形式为 `vscode.commands.executeCommand('project-atlas.setGitCommitMessage', message)`。
+- 只有当前会话提供了能向 VS Code 扩展命令传递参数的命令桥接工具时，才调用该命令。传入完整消息（包括正文和 `BREAKING CHANGE:` 页脚，如有）；若可明确定位仓库，可一并传入仓库 URI。
+- 该命令只设置 Source Control 输入框，不提交代码。调用成功后，告知用户消息已填入，并同时展示生成的消息供核对。
+- 若没有可用的命令桥接工具、Project Atlas VS 命令不可用，或调用失败，不要声称已经填入；照常展示可复制的消息，并简要说明当前环境无法直接调用 VS Code 命令。
+- 不要用 `code --command` 或只打开命令面板来冒充带参数调用；这类方式无法按本 skill 的要求将生成的消息传给扩展命令。
