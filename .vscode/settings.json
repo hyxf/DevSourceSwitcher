@@ -47,7 +47,6 @@
         "**/DerivedData": true,
         "**/Pods": true,
         "**/Carthage": true,
-        "**/*.xcodeproj": true,
     },
 
     // =========================
