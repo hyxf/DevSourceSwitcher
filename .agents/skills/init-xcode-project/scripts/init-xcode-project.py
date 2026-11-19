@@ -55,7 +55,12 @@ def main(argv):
     try:
         args = parser.parse_args(argv)
     except ValueError as error:
-        report("error", "init", str(error), json_output)
+        requested_action = next(
+            ("check" if arg == "--check" else "install"
+             for arg in argv if arg in ("--check", "--install")),
+            "init",
+        )
+        report("error", requested_action, str(error), json_output)
         return 2
 
     action = "check" if args.check else "install" if args.install else "init"
