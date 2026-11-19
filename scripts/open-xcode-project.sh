@@ -60,7 +60,7 @@ for ARG in "$@"; do
 done
 
 if [[ ! -d "$PROJECT_PATH" || ! -f "$PROJECT_PATH/project.pbxproj" ]]; then
-    fail 'Xcode project is missing; run scripts/init-project.sh first'
+    fail 'Xcode project is missing; run scripts/init-xcode-project.sh first'
 fi
 
 if ! command -v open >/dev/null 2>&1; then

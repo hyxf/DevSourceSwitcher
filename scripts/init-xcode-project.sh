@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
     cat <<'EOF'
-Usage: scripts/init-project.sh [--check | --install] [--json]
+Usage: scripts/init-xcode-project.sh [--check | --install] [--json]
 
 Prepare the Xcode project using the repository's project.yml.
   --check   Check local prerequisites without generating the project.
