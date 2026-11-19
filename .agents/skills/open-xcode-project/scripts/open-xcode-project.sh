@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 PROJECT_PATH="$ROOT_DIR/DevSourceSwitcher.xcodeproj"
 JSON_OUTPUT=false
 CHECK_ONLY=false
@@ -10,7 +10,7 @@ XCODE_APP=""
 
 usage() {
     cat <<'EOF'
-Usage: scripts/open-xcode-project.sh [--check] [--json]
+Usage: .agents/skills/open-xcode-project/scripts/open-xcode-project.sh [--check] [--json]
 
 Open this repository's Xcode project in the locally selected Xcode application.
   --check   Verify the .xcodeproj and selected Xcode installation without opening it.
@@ -60,7 +60,7 @@ for ARG in "$@"; do
 done
 
 if [[ ! -d "$PROJECT_PATH" || ! -f "$PROJECT_PATH/project.pbxproj" ]]; then
-    fail 'Xcode project is missing; run scripts/init-xcode-project.sh first'
+    fail 'Xcode project is missing; run .agents/skills/init-xcode-project/scripts/init-xcode-project.sh first'
 fi
 
 if ! command -v open >/dev/null 2>&1; then
