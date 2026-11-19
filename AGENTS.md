@@ -9,8 +9,8 @@
 - 运行 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh --check` 检查本机是否安装 `xcodegen`，并确认 `project.yml` 存在；该检查不会生成或修改项目文件。
 - 运行 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh` 在已安装 `xcodegen` 时根据 `project.yml` 生成被 Git 忽略的 `DevSourceSwitcher.xcodeproj`。
 - 运行 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh --install` 在缺少 `xcodegen` 时通过 Homebrew 安装，然后生成 Xcode 项目；此选项需要本机已安装 Homebrew。
-- 自动化调用可追加 `--json` 获取机器可读结果，例如 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh --check --json`。`--check` 与 `--install` 互斥，未知参数会报错。
-- 运行 `.agents/skills/open-xcode-project/scripts/open-xcode-project.sh` 使用 `xcode-select` 选定的本机 Xcode 打开 `DevSourceSwitcher.xcodeproj`；如果项目文件缺失，先运行初始化脚本。可用 `--check --json` 检查项目和完整 Xcode 安装，不会打开项目。
+- 自动化调用可追加 `--json` 获取机器可读结果，例如 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh --check --json`。`--check` 与 `--install` 互斥，未知参数会报错。脚本默认使用当前目录作为项目根目录，从其他目录调用时添加 `--project-root /项目/目录`。
+- 运行 `.agents/skills/open-xcode-project/scripts/open-xcode-project.sh` 使用 `xcode-select` 选定的本机 Xcode 打开根目录中唯一的 `.xcodeproj`；如果项目文件缺失，先运行初始化脚本。可用 `--check --json` 检查项目和完整 Xcode 安装，不会打开项目。根目录有多个项目时，使用 `--project 路径` 指定目标。
 
 修改 `project.yml` 后，重新运行 `.agents/skills/init-xcode-project/scripts/init-xcode-project.sh`，再使用 Xcode 打开项目。
 

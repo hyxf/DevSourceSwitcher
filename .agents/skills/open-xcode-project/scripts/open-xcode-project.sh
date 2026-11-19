@@ -2,80 +2,139 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-PROJECT_PATH="$ROOT_DIR/DevSourceSwitcher.xcodeproj"
+PROJECT_ROOT="$PWD"
+PROJECT_ARGUMENT=""
 JSON_OUTPUT=false
 CHECK_ONLY=false
 XCODE_APP=""
 
+for ARG in "$@"; do
+    if [[ "$ARG" == "--json" ]]; then
+        JSON_OUTPUT=true
+    fi
+done
+
 usage() {
     cat <<'EOF'
-Usage: .agents/skills/open-xcode-project/scripts/open-xcode-project.sh [--check] [--json]
+Usage: open-xcode-project.sh [--check] [--project-root DIR] [--project PATH] [--json]
 
-Open this repository's Xcode project in the locally selected Xcode application.
+Open an Xcode project in the locally selected Xcode application.
   --check   Verify the .xcodeproj and selected Xcode installation without opening it.
+  --project-root DIR  Use DIR instead of the current directory as the project root.
+  --project PATH  Select a project when the root contains multiple .xcodeproj files.
   --json    Print a machine-readable result object.
   -h, --help  Show this help.
 EOF
 }
 
-report() {
-    local status="$1"
-    local detail="$2"
+json_escape() {
+    local LC_ALL=C input="$1" output="" char code escaped i
+    for ((i = 0; i < ${#input}; i++)); do
+        char="${input:i:1}"
+        case "$char" in
+            '"') output+='\"' ;;
+            '\') output+='\\' ;;
+            *)
+                printf -v code '%d' "'$char"
+                if ((code < 32)); then
+                    printf -v escaped '\\u%04x' "$code"
+                    output+="$escaped"
+                else
+                    output+="$char"
+                fi
+                ;;
+        esac
+    done
+    printf '%s' "$output"
+}
 
+report() {
+    local status="$1" detail="$2"
     if [[ "$JSON_OUTPUT" == true ]]; then
-        detail="${detail//\\/\\\\}"
-        detail="${detail//\"/\\\"}"
-        detail="${detail//$'\n'/\\n}"
         printf '{"status":"%s","action":"open-xcode-project","detail":"%s"}\n' \
-            "$status" "$detail"
+            "$status" "$(json_escape "$detail")"
+    elif [[ "$status" == "error" ]]; then
+        printf '%s: %s\n' "$status" "$detail" >&2
     else
         printf '%s: %s\n' "$status" "$detail"
     fi
 }
 
 fail() {
-    report 'error' "$1" >&2
-    exit 1
+    report 'error' "$1"
+    exit "${2:-1}"
 }
 
-for ARG in "$@"; do
-    case "$ARG" in
+while (($#)); do
+    case "$1" in
         --check)
             CHECK_ONLY=true
+            shift
+            ;;
+        --project-root)
+            if (($# < 2)); then
+                fail 'Option --project-root requires a directory' 2
+            fi
+            PROJECT_ROOT="$2"
+            shift 2
+            ;;
+        --project)
+            if (($# < 2)); then
+                fail 'Option --project requires a path' 2
+            fi
+            PROJECT_ARGUMENT="$2"
+            shift 2
             ;;
         --json)
-            JSON_OUTPUT=true
+            shift
             ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
-            printf 'Unknown option: %s\n' "$ARG" >&2
-            usage >&2
-            exit 2
+            fail "Unknown option: $1" 2
             ;;
     esac
 done
 
+if [[ ! -d "$PROJECT_ROOT" ]]; then
+    fail "Project root does not exist: $PROJECT_ROOT"
+fi
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
+
+if [[ -n "$PROJECT_ARGUMENT" ]]; then
+    if [[ "$PROJECT_ARGUMENT" == /* ]]; then
+        PROJECT_PATH="$PROJECT_ARGUMENT"
+    else
+        PROJECT_PATH="$PROJECT_ROOT/$PROJECT_ARGUMENT"
+    fi
+else
+    shopt -s nullglob
+    PROJECTS=("$PROJECT_ROOT"/*.xcodeproj)
+    shopt -u nullglob
+    if ((${#PROJECTS[@]} == 0)); then
+        fail 'No .xcodeproj found in the project root; run init-xcode-project.sh first'
+    fi
+    if ((${#PROJECTS[@]} > 1)); then
+        fail 'Multiple .xcodeproj files found; select one with --project PATH'
+    fi
+    PROJECT_PATH="${PROJECTS[0]}"
+fi
+
 if [[ ! -d "$PROJECT_PATH" || ! -f "$PROJECT_PATH/project.pbxproj" ]]; then
-    fail 'Xcode project is missing; run .agents/skills/init-xcode-project/scripts/init-xcode-project.sh first'
+    fail "Xcode project is missing or incomplete: $PROJECT_PATH"
 fi
 
 if ! command -v open >/dev/null 2>&1; then
     fail 'macOS open command is unavailable; run this script on macOS'
 fi
 
-if [[ -n "${DEVELOPER_DIR:-}" ]]; then
-    DEVELOPER_PATH="$DEVELOPER_DIR"
-else
-    if ! command -v xcode-select >/dev/null 2>&1; then
-        fail 'xcode-select is unavailable; install Xcode command line tools or Xcode'
-    fi
-    if ! DEVELOPER_PATH="$(xcode-select -p 2>/dev/null)"; then
-        fail 'No active Xcode developer directory; install Xcode and select it with xcode-select'
-    fi
+if ! command -v xcode-select >/dev/null 2>&1; then
+    fail 'xcode-select is unavailable; install Xcode command line tools or Xcode'
+fi
+if ! DEVELOPER_PATH="$(DEVELOPER_DIR= xcode-select -p 2>/dev/null)"; then
+    fail 'No active Xcode developer directory; install Xcode and select it with xcode-select'
 fi
 
 case "$DEVELOPER_PATH" in
