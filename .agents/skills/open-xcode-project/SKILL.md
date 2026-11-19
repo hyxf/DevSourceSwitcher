@@ -5,7 +5,7 @@ description: Open a generated .xcodeproj from an XcodeGen project in the locally
 
 # 在本地 Xcode 中打开项目
 
-使用本 skill 的 `scripts/open-xcode-project.sh` 打开 Xcode 项目。默认将当前目录视为项目根目录；从其他目录调用时，添加 `--project-root /项目/目录`。根目录中有多个 `.xcodeproj` 时，添加 `--project 路径` 指定目标。
+使用 `python3` 运行本 skill 的 `scripts/open-xcode-project.py` 打开 Xcode 项目。默认将当前目录视为项目根目录；从其他目录调用时，添加 `--project-root /项目/目录`。根目录中有多个 `.xcodeproj` 时，添加 `--project 路径` 指定目标。
 
 1. 运行该脚本并添加 `--check --json`，确认项目根目录下有目标 `.xcodeproj/project.pbxproj`，且本机选定的是完整的 Xcode.app。
 2. 如果项目文件缺失，先运行 `init-xcode-project` skill 的生成脚本。
